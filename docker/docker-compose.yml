@@ -1,0 +1,33 @@
+services:
+  stickynotes:
+    container_name: stickynotes
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:${HOST_PORT:-8060}:8060"
+
+    environment:
+      DATA_DIR: /data
+      CONFIG_DIR: /config
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8060"
+      TZ: Europe/Zurich
+
+    volumes:
+      - ${DATA_DIR_HOST:-/opt/stickynotes/notes}:/data
+      - /opt/stickynotes/config:/config:ro
+
+
+  rclone-sync:
+    image: rclone/rclone:latest
+    container_name: stickynotes-rclone
+    restart: unless-stopped
+    volumes:
+      - ${DATA_DIR_HOST:-/opt/stickynotes/notes}:/data
+      - ./rclone:/scripts:ro
+    entrypoint: ["/bin/sh","/scripts/entrypoint.sh"]
+    depends_on:
+      - stickynotes

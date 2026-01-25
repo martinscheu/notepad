@@ -1,0 +1,1054 @@
+/* Nordic, low-distraction theme - minimal palette */
+:root{
+  --sidebar-width: 360px;
+  --radius: 12px;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --surface-3: #e9edf3;
+  --text: #1b1f24;
+  --muted: #5a6673;
+  --border: #d7dde4;
+  --accent: #2b6cb0;
+  --danger: #b00020;
+
+  --radius: 12px;
+  --gap: 12px;
+  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+}
+
+[data-theme="dark"]{
+  --bg: #0f1216;
+  --surface: #141922;
+  --surface-2: #10151d;
+  --surface-3: #0f151f;
+  --text: #e7ebf0;
+  --muted: #a7b1bd;
+  --border: #263142;
+  --accent: #6aa6ff;
+  --danger: #ff6b7a;
+}
+
+*{ box-sizing: border-box; }
+html, body{ height: 100%; }
+body{
+  margin: 0;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+}
+
+.topbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar-left, .topbar-right{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.brand{
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-right: 6px;
+}
+
+.input, .select{
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+
+.input{ width: 380px; max-width: 50vw; }
+
+.input:focus, .select:focus, .btn:focus, .editor:focus{
+  border-color: color-mix(in srgb, var(--accent), var(--border) 65%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 85%);
+}
+
+.btn{
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn.danger{
+  border-color: color-mix(in srgb, var(--danger), var(--border) 70%);
+}
+
+.layout{
+  display: flex;
+  height: calc(100% - 57px);
+  min-height: 0;
+}
+
+.sidebar{
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar-head{
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.notes-list{
+  overflow: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.note-row{
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.note-row:hover{
+  border-color: color-mix(in srgb, var(--accent), var(--border) 70%);
+}
+.note-row.active{
+  border-color: var(--accent);
+}
+.note-row .title{
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-word;
+}
+.note-row .sub{
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.note-row.pinned{
+  background: color-mix(in srgb, var(--surface), var(--accent) 4%);
+}
+
+.main{
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tabsbar{
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  overflow: auto;
+  white-space: nowrap;
+  min-height: 44px;
+}
+
+.tab{
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  max-width: 520px;
+}
+.tab.active{
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--surface-2), var(--accent) 6%);
+}
+.tab .name{
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editorbar{
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.fileline{
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.filename{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.save-indicator{
+  text-align: right;
+}
+
+.muted{ color: var(--muted); font-size: 12px; }
+
+.editor{
+  flex: 1;
+  width: 100%;
+  border: 0;
+  padding: 14px;
+  resize: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+  position: relative;
+  z-index: 2;
+}
+
+.editor::selection{
+  background: color-mix(in srgb, var(--accent), transparent 65%);
+  color: var(--text);
+}
+
+.editor-area{
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.editor-stack{
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  background: var(--surface);
+}
+
+.toc-panel{
+  width: 220px;
+  border-right: 1px solid var(--border);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  min-height: 0;
+}
+.toc-panel.hidden{ display: none; }
+.toc-list{
+  display: grid;
+  gap: 6px;
+  overflow: auto;
+}
+.toc-item{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 4px 6px;
+  background: transparent;
+}
+.toc-item:hover{
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--surface), var(--accent) 6%);
+}
+
+.editor-highlight{
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  color: transparent;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.editor-highlight .hl{
+  background: color-mix(in srgb, var(--accent), transparent 55%);
+  color: transparent;
+  border-radius: 2px;
+}
+
+.replace-panel{
+  width: 280px;
+  border-left: 1px solid var(--border);
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  min-height: 0;
+}
+.replace-panel.hidden{ display: none; }
+.panel-header, .panel-footer{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.panel-title{
+  font-size: 13px;
+  font-weight: 600;
+}
+.panel-body{
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 980px){
+  .replace-panel{
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .editor-area{
+    flex-direction: column;
+  }
+  .toc-panel{
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+.help{
+  padding: 8px 12px 12px 12px;
+}
+
+@media (max-width: 980px){
+  .layout{ grid-template-columns: 1fr; height: auto; }
+  .sidebar{ border-right: 0; border-bottom: 1px solid var(--border); }
+  .input{ width: 100%; max-width: 100%; }
+  .editorbar{ grid-template-columns: 1fr; }
+  .save-indicator{ text-align: left; }
+}
+
+
+.tab-close{
+  margin-left: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+.tab-close:hover{
+  border-color: color-mix(in srgb, var(--danger), var(--border) 70%);
+  color: var(--danger);
+}
+
+
+/* Sidebar collapse */
+.layout.sidebar-collapsed{
+  grid-template-columns: 1fr;
+}
+.layout.sidebar-collapsed .sidebar{
+  display: none;
+}
+
+
+
+
+
+.preview{flex:1;width:100%;padding:14px;overflow:auto;background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.55;}
+.preview h1,.preview h2,.preview h3{margin:0.6em 0 0.35em 0;line-height:1.2;}
+.preview p{margin:0.45em 0;}
+.preview ul,.preview ol{margin:0.4em 0 0.4em 1.2em;}
+.preview li{margin:0.2em 0;}
+.preview code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:0.95em;background:var(--surface-2);border:1px solid var(--border);padding:1px 6px;border-radius:8px;}
+.preview pre{background:var(--surface-2);border:1px solid var(--border);padding:12px;border-radius:12px;overflow:auto;}
+.preview pre code{background:transparent;border:0;padding:0;}
+.preview blockquote{margin:0.5em 0;padding:0.2em 0 0.2em 0.8em;border-left:3px solid var(--border);color:var(--muted);}
+.preview hr{border:0;border-top:1px solid var(--border);margin:0.9em 0;}
+
+
+.note-row{
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.note-check{
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.note-actions{
+  display: inline-flex;
+  gap: 6px;
+}
+
+
+/* Bulk-select list rows */
+.note-row{
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.note-check{
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.note-content{ min-width: 0; }
+
+.note-row .title{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* Tabs: rounded-rect (not capsule) */
+.tab{
+  border-radius: 12px !important;
+}
+.tab .close{
+  border-radius: 10px !important;
+}
+
+
+.sort-mode-label{
+  margin-left: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+
+/* Sidebar resizable width */
+.sidebar{
+  width: var(--sidebar-width) !important;
+  min-width: 260px;
+  max-width: 720px;
+}
+
+.splitter{
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+}
+.splitter:hover{
+  background: var(--surface-2);
+}
+.splitter.dragging{
+  background: var(--surface-2);
+}
+
+
+
+/* Consistent radii across UI */
+.btn, .tab, .note-row, .sort-mode-label, .bulk-actions .btn{
+  border-radius: var(--radius) !important;
+}
+
+.tab{
+  border-radius: var(--radius) !important;
+}
+
+/* Bulk actions compact layout */
+.bulk-actions{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px 10px 0 10px;
+}
+
+.bulk-actions .btn{
+  width: 100%;
+}
+
+/* Make delete button look consistent (no golden frame) */
+.btn.danger{
+  border-color: var(--danger) !important;
+  box-shadow: none !important;
+}
+.btn.danger:hover{
+  filter: none !important;
+}
+
+/* Reduce visual noise for file list cards */
+.note-row{
+  box-shadow: none !important;
+}
+
+
+.sidebar{
+  width: var(--sidebar-width);
+  flex: 0 0 var(--sidebar-width);
+  min-width: 260px;
+  max-width: 720px;
+  min-height: 0;
+}
+
+.main{
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Splitter between panes */
+.splitter{
+  flex: 0 0 10px;
+  width: 10px;
+  cursor: col-resize;
+  background: transparent;
+}
+.splitter:hover{
+  background: var(--surface-2);
+}
+.splitter.dragging{
+  background: var(--surface-2);
+}
+
+/* Bulk buttons smaller + more minimal */
+.bulk-actions{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px 10px 0 10px;
+}
+.bulk-actions .btn{
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+/* Consistent radii */
+.btn, .tab, .note-row, .sort-mode-label{
+  border-radius: var(--radius) !important;
+}
+
+/* Danger button minimal (no thick border) */
+.btn.danger{
+  border: 1px solid var(--danger) !important;
+  color: var(--danger) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.btn.danger:hover{
+  background: rgba(220, 38, 38, 0.06) !important;
+}
+
+
+/* Bulk buttons: compact, fit text */
+.bulk-actions{
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 10px 0 10px;
+}
+
+.bulk-actions .btn{
+  width: auto !important;
+  padding: 8px 10px !important;
+  font-size: 12px !important;
+  line-height: 1.1;
+}
+
+/* Danger button: minimal (border only), keep normal text color */
+.btn.danger{
+  border: 1px solid var(--danger) !important;
+  color: var(--text) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.btn.danger:hover{
+  background: rgba(220, 38, 38, 0.06) !important;
+}
+
+/* Splitter: ensure it can be grabbed */
+.splitter{
+  position: relative;
+  z-index: 5;
+}
+
+/* --- notes 0.5.0 UX overrides (minimal & consistent) --- */
+
+/* Tabs row: tabs + actions + saved state on one line */
+.tabsbar{
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.tabsbar .tabs{
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  overflow: auto !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+.tab-actions{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent), transparent 92%);
+}
+
+.tab-actions .btn{
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.save-indicator{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 160px;
+}
+
+/* Sidebar bulk actions: smaller + less dominant */
+.bulk-actions{
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  padding: 10px 10px 0 10px !important;
+}
+
+.bulk-actions .btn{
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* Danger buttons: neutral by default, red only on hover */
+.btn.danger{
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+}
+
+.btn.danger:hover{
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+  background: color-mix(in srgb, var(--danger), transparent 94%) !important;
+}
+
+/* Sidebar width must follow the resizer variable */
+.sidebar{
+  width: var(--sidebar-width) !important;
+  flex: 0 0 var(--sidebar-width) !important;
+  min-width: 260px !important;
+  max-width: 720px !important;
+}
+
+/* Splitter: ensure it's hit-testable */
+.splitter{
+  width: 10px !important;
+  flex: 0 0 10px !important;
+  cursor: col-resize !important;
+  pointer-events: auto !important;
+}
+
+#statusLine{ white-space: pre-line; text-align: right; }
+
+
+
+/* Note actions in top bar (next to New) */
+.note-actions-top{
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: 10px;
+}
+.note-actions-top .btn{
+  padding: 8px 12px;
+}
+.note-actions-top .action-group{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Distraction-free mode: when file view off, hide tabs row too */
+.no-files-mode #tabsBar,
+.no-files-mode #tabs,
+.no-files-mode .tabs{
+  display: none !important;
+}
+
+
+/* No Files mode: keep top bar, hide only the open-tabs bar */
+.no-files-mode #tabsBar,
+.no-files-mode #tabs,
+.no-files-mode .tabsbar,
+.no-files-mode .tabs {
+  display: none !important;
+}
+
+
+
+
+/* Focus mode (Files off): layout uses .sidebar-collapsed on .layout */
+.layout.sidebar-collapsed .editor-header,
+.layout.sidebar-collapsed .file-info,
+.layout.sidebar-collapsed #fileInfo,
+.layout.sidebar-collapsed #tabsBar,
+.layout.sidebar-collapsed .tabsbar,
+.layout.sidebar-collapsed .tabs {
+  display: none !important;
+}
+
+/* When header hidden, remove its reserved space */
+.layout.sidebar-collapsed .main,
+.layout.sidebar-collapsed .editor-area{
+  padding-top: 0 !important;
+}
+
+
+/* Always hide the editor file-info bar ("File <name>") */
+.file-info,
+#fileInfo {
+  display: none !important;
+}
+
+
+/* Always hide the editor fileline bar ("File <name>") */
+.fileline {
+  display: none !important;
+}
+
+
+/* Hide the "Saved <time>" indicator in the editor header (we show it in the sidebar header instead) */
+.editor-header .saved,
+.editor-header .saved-indicator,
+#savedIndicator {
+  display: none !important;
+}
+
+
+/* Hide saved indicator shown in the tabs bar */
+.save-indicator {
+  display: none !important;
+}
+
+
+/* Small ghost button (used for Focus/Notes list next to title) */
+.btn-small { padding: 8px 12px; font-size: 14px; }
+.btn-ghost { background: transparent; }
+.btn-ghost:hover { background: rgba(0,0,0,0.04); }
+body.dark .btn-ghost:hover { background: rgba(255,255,255,0.06); }
+
+.small{ font-size: 13px; }
+
+
+/* Remove focus aura on Focus/Notes list button for minimal look */
+#fileViewToggle:focus,
+#fileViewToggle:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+
+/* Focus mode: hide Rename button */
+.layout.sidebar-collapsed #renameNote {
+  display: none !important;
+}
+
+
+/* Sidebar meta: Tab sorting should match Notes / Saved typography */
+#tabSortingInfo {
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.8;
+}
+
+
+/* Normalize accent color to green */
+:root {
+  --accent-color: #809398;
+}
+
+.btn-primary,
+.btn-active,
+.tab.active,
+.tab.is-active {
+  border-color: #809398 !important;
+}
+
+.tab.active {
+  box-shadow: inset 0 -2px 0 #809398 !important;
+}
+
+
+/* Modal */
+.modal.hidden { display: none; }
+.modal { position: fixed; inset: 0; z-index: 50; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.35); }
+body.dark .modal-backdrop { background: rgba(0,0,0,0.55); }
+.modal-card {
+  position: relative;
+  width: min(720px, calc(100% - 32px));
+  margin: 48px auto;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, rgba(0,0,0,0.10));
+  border-radius: 14px;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.18);
+  overflow: hidden;
+}
+body.dark .modal-card { background: #0f1317; border-color: rgba(255,255,255,0.10); box-shadow: 0 12px 34px rgba(0,0,0,0.55); }
+.modal-header, .modal-footer { display:flex; align-items:center; justify-content: space-between; gap: 10px; padding: 12px 14px; }
+.modal-header { border-bottom: 1px solid var(--border, rgba(0,0,0,0.10)); }
+body.dark .modal-header { border-color: rgba(255,255,255,0.10); }
+.modal-title { font-size: 16px; font-weight: 600; }
+.modal-body { padding: 14px; display: grid; gap: 12px; }
+.form-row { display: grid; gap: 6px; }
+.form-row label { font-size: 13px; opacity: 0.85; }
+.form-row input, .form-row select {
+  width: 100%;
+  padding: 10px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border, rgba(0,0,0,0.12));
+  background: transparent;
+  color: inherit;
+}
+body.dark .form-row input, body.dark .form-row select { border-color: rgba(255,255,255,0.12); }
+.grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px){ .grid-2{ grid-template-columns: 1fr; } }
+.checkbox { display:flex; align-items:center; gap: 10px; }
+.checkbox input { width: 16px; height: 16px; }
+
+
+/* Active tab outline: thin and equal all around */
+.tab.active, .tab.is-active, .tab--active {
+  border: 1px solid var(--accent-color, #809398) !important;
+  box-shadow: none !important;
+}
+
+
+.top-sync-status{
+  margin-left: 10px;
+  font-size: 12px;
+  opacity: 0.8;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border, rgba(0,0,0,0.10));
+  background: rgba(128,147,152,0.08);
+  white-space: nowrap;
+}
+body.dark .top-sync-status{
+  border-color: rgba(255,255,255,0.10);
+  background: rgba(128,147,152,0.12);
+}
+.top-sync-status.hidden{ display:none; }
+
+
+/* Dark theme modal */
+body.dark .modal-backdrop{
+  background: rgba(0,0,0,0.55);
+}
+body.dark .modal{
+  background: rgba(0,0,0,0.0);
+}
+body.dark .modal-content{
+  background: rgba(25,30,33,0.98);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  color: rgba(255,255,255,0.88);
+}
+body.dark .modal-content input,
+body.dark .modal-content select{
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.88);
+}
+body.dark .modal-content label{
+  color: rgba(255,255,255,0.78);
+}
+body.dark .modal-content .btn{
+  border-color: rgba(255,255,255,0.14);
+}
+
+/* Reduce focus aura */
+.btn:focus,
+.btn:focus-visible{
+  outline: 1px solid rgba(128,147,152,0.55);
+  outline-offset: 2px;
+}
+
+
+.footer-sync-status{
+  margin-left: 10px;
+  font-size: 12px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+
+/* Sidebar head fixed height (prevents list flicker when status updates) */
+.sidebar-head{
+  min-height: 70px; /* reserve space for 3 lines */
+}
+.sidebar-head > div{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* Dark theme modal (broad selectors) */
+html.dark .modal-backdrop,
+body.dark .modal-backdrop,
+html[data-theme="dark"] .modal-backdrop,
+body[data-theme="dark"] .modal-backdrop{
+  background: rgba(0,0,0,0.55);
+}
+
+html.dark .modal-content,
+body.dark .modal-content,
+html[data-theme="dark"] .modal-content,
+body[data-theme="dark"] .modal-content{
+  background: rgba(25,30,33,0.98);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  color: rgba(255,255,255,0.88);
+}
+
+html.dark .modal-content input,
+body.dark .modal-content input,
+html[data-theme="dark"] .modal-content input,
+body[data-theme="dark"] .modal-content input,
+html.dark .modal-content select,
+body.dark .modal-content select,
+html[data-theme="dark"] .modal-content select,
+body[data-theme="dark"] .modal-content select{
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.88);
+}
+
+html.dark .modal-content label,
+body.dark .modal-content label,
+html[data-theme="dark"] .modal-content label,
+body[data-theme="dark"] .modal-content label{
+  color: rgba(255,255,255,0.78);
+}
+
+html.dark .modal-content .btn,
+body.dark .modal-content .btn,
+html[data-theme="dark"] .modal-content .btn,
+body[data-theme="dark"] .modal-content .btn{
+  border-color: rgba(255,255,255,0.14);
+}
+
+
+.help .footer-line{
+  display: block;
+  line-height: 1.35;
+  margin: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* Dark theme sync modal */
+html[data-theme="dark"] .modal-backdrop{
+  background: rgba(0,0,0,0.55);
+}
+html[data-theme="dark"] .modal-card{
+  background: rgba(25,30,33,0.98);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  color: rgba(255,255,255,0.88);
+}
+html[data-theme="dark"] .modal-title{
+  color: rgba(255,255,255,0.92);
+}
+html[data-theme="dark"] .modal-body label,
+html[data-theme="dark"] .modal-body .checkbox span{
+  color: rgba(255,255,255,0.78);
+}
+html[data-theme="dark"] .modal-body input,
+html[data-theme="dark"] .modal-body select{
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.88);
+}
+html[data-theme="dark"] .modal-body input::placeholder{
+  color: rgba(255,255,255,0.30);
+}
+html[data-theme="dark"] .modal-footer .btn,
+html[data-theme="dark"] .modal-header .btn{
+  border-color: rgba(255,255,255,0.14);
+}
