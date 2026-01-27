@@ -316,6 +316,7 @@ def api_create_note():
         "rev": 1,
         "filename": content_path.name,
         "title": "",
+        "subject": "",
         "pinned": False,
         "deleted": False,
     }
@@ -395,6 +396,7 @@ def api_import_notes():
             "rev": 1,
             "filename": content_path.name,
             "title": title,
+            "subject": "",
             "pinned": False,
             "deleted": False,
         }
@@ -458,6 +460,7 @@ def api_update_meta(note_id: str):
     new_title = body.get("user_title", None)
     pinned = body.get("pinned", None)
     display_title = body.get("title", None)
+    subject = body.get("subject", None)
 
     content_path, meta_path, deleted = find_note_files_by_id(note_id)
     if not meta_path:
@@ -502,6 +505,11 @@ def api_update_meta(note_id: str):
         meta["rev"] = int(meta.get("rev", 0)) + 1
     elif display_title is not None:
         meta["title"] = str(display_title).strip()
+        meta["updated"] = utc_now_iso()
+        meta["rev"] = int(meta.get("rev", 0)) + 1
+
+    if subject is not None:
+        meta["subject"] = str(subject).strip()
         meta["updated"] = utc_now_iso()
         meta["rev"] = int(meta.get("rev", 0)) + 1
 

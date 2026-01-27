@@ -104,6 +104,7 @@ Example:
   "updated": "2026-01-06T21:17:02Z",
   "rev": 12,
   "filename": "2026-01-06_21-14-33_ab12cd34.md",
+  "subject": "Research",
   "pinned": false,
   "deleted": false
 }
@@ -112,6 +113,7 @@ Example:
 Notes:
 - `rev` is an integer revision counter, incremented on every save
 - Unknown fields must be ignored (forward-compatible)
+- `subject` is an optional grouping label shown in the notes list
 
 ---
 

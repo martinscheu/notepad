@@ -110,6 +110,7 @@ function renderTabsSafe(){
 
   let previewMode = false;
   let previewFormat = (localStorage.getItem("sn_preview_format") || "md");
+  let groupState = {};
   selectedIds = new Set();
 let deleteInProgress = false;
 
@@ -468,11 +469,15 @@ let deleteInProgress = false;
     const t = getActiveTab();
     if(!t) return;
     const input = document.getElementById("rename-input");
+    const subjectInput = document.getElementById("subject-input");
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden","false");
     if(input){
       input.value = (t.meta && (t.meta.title || t.meta.display_title || t.meta.user_title || "")) || "";
       setTimeout(() => { input.focus(); input.select(); }, 0);
+    }
+    if(subjectInput){
+      subjectInput.value = (t.meta && (t.meta.subject || "")) || "";
     }
   }
 
@@ -487,12 +492,14 @@ let deleteInProgress = false;
     const t = getActiveTab();
     if(!t) return;
     const input = document.getElementById("rename-input");
+    const subjectInput = document.getElementById("subject-input");
     const newTitle = (input ? input.value : "").trim();
+    const newSubject = (subjectInput ? subjectInput.value : "").trim();
     setStatus("Renaming...");
     try{
       const meta = await apiPut(
         `/api/notes/${encodeURIComponent(t.noteId)}/meta`,
-        {user_title: newTitle, title: newTitle}
+        {user_title: newTitle, title: newTitle, subject: newSubject}
       );
       t.meta = meta;
       t.rev = meta.rev || t.rev;
@@ -523,6 +530,13 @@ let deleteInProgress = false;
     if(saveBtn) saveBtn.addEventListener("click", saveRenameFromModal);
     const input = document.getElementById("rename-input");
     if(input) input.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){
+        e.preventDefault();
+        saveRenameFromModal();
+      }
+    });
+    const subjectInput = document.getElementById("subject-input");
+    if(subjectInput) subjectInput.addEventListener("keydown", (e) => {
       if(e.key === "Enter"){
         e.preventDefault();
         saveRenameFromModal();
@@ -961,6 +975,62 @@ function enableActions(enabled){
     return pinPrefix(meta) + fn;
   }
 
+  function normalizeSubject(s){
+    return (s || "").trim();
+  }
+
+  function getGroupKey(meta){
+    const sub = normalizeSubject(meta.subject);
+    return sub || "Unsorted";
+  }
+
+  function loadGroupState(){
+    try{
+      const raw = localStorage.getItem("sn_group_state");
+      if(raw) groupState = JSON.parse(raw) || {};
+    }catch(e){
+      groupState = {};
+    }
+  }
+
+  function saveGroupState(){
+    try{
+      localStorage.setItem("sn_group_state", JSON.stringify(groupState || {}));
+    }catch(e){}
+  }
+
+  function toggleGroup(key){
+    groupState[key] = !groupState[key];
+    saveGroupState();
+    renderNotesList();
+  }
+
+  function makeGroupHeader(name, count, collapsed){
+    const header = document.createElement("div");
+    header.className = "note-group-header";
+    const left = document.createElement("div");
+    left.style.display = "flex";
+    left.style.alignItems = "center";
+
+    const caret = document.createElement("span");
+    caret.className = "note-group-caret";
+    caret.textContent = collapsed ? "▶" : "▼";
+    left.appendChild(caret);
+
+    const title = document.createElement("div");
+    title.className = "note-group-title";
+    title.textContent = name;
+    left.appendChild(title);
+
+    const right = document.createElement("div");
+    right.className = "note-group-count";
+    right.textContent = `${count}`;
+
+    header.appendChild(left);
+    header.appendChild(right);
+    return header;
+  }
+
   function setFileName(meta){
     if(!elFileName) return;
     elFileName.textContent = displayFilenameWithPin(meta);
@@ -1019,9 +1089,30 @@ function renderNotesList(){
     elNotesList.innerHTML = "";
     elNotesCount.textContent = `Notes: ${notes.length}`;
     const activeNoteId = (getActiveTab && getActiveTab()) ? getActiveTab().noteId : null;
+    const grouped = {};
     for(const meta of notes){
-      const isActive = activeNoteId && String(meta.id) === String(activeNoteId);
-      elNotesList.appendChild(makeNoteRow(meta, isActive));
+      const key = getGroupKey(meta);
+      if(!grouped[key]) grouped[key] = [];
+      grouped[key].push(meta);
+    }
+    const keys = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+    for(const key of keys){
+      const items = grouped[key];
+      const collapsed = !!groupState[key];
+      const groupEl = document.createElement("div");
+      groupEl.className = "note-group" + (collapsed ? " collapsed" : "");
+      const header = makeGroupHeader(key, items.length, collapsed);
+      header.addEventListener("click", () => toggleGroup(key));
+      groupEl.appendChild(header);
+
+      const body = document.createElement("div");
+      body.className = "note-group-body";
+      for(const meta of items){
+        const isActive = activeNoteId && String(meta.id) === String(activeNoteId);
+        body.appendChild(makeNoteRow(meta, isActive));
+      }
+      groupEl.appendChild(body);
+      elNotesList.appendChild(groupEl);
     }
   }
 
@@ -1689,6 +1780,7 @@ async function init(){
     setFileViewMode(fileView);
     setTocOpen(tocOpen === "on");
     setPreviewFormat(previewFormat);
+    loadGroupState();
     enableActions(false);
     elEditor.disabled = true;
     setSaveState("Idle", "");
