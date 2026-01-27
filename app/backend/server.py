@@ -8,6 +8,7 @@ import re
 import shutil
 import zipfile
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,10 +19,16 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Preformatted
 try:
     import yaml
 except Exception:
     yaml = None
+try:
+    import markdown as mdlib
+except Exception:
+    mdlib = None
 
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 
@@ -61,6 +68,120 @@ def _pdf_wrap_lines(text: str, c, max_width: float, font_name: str, font_size: i
         if cur:
             lines_out.append(cur)
     return lines_out
+
+
+class _MdBlockParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.blocks: List[Dict[str, Any]] = []
+        self.cur_tag: Optional[str] = None
+        self.cur = ""
+        self.in_pre = False
+        self.list_stack: List[Dict[str, Any]] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("ul", "ol"):
+            self.list_stack.append({"type": tag, "index": 0})
+            return
+        if tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6", "li"):
+            self.cur_tag = tag
+            self.cur = ""
+            return
+        if tag == "pre":
+            self.in_pre = True
+            self.cur_tag = "pre"
+            self.cur = ""
+            return
+        # inline tags
+        if tag == "strong":
+            self.cur += "<b>"
+        elif tag == "em":
+            self.cur += "<i>"
+        elif tag == "code":
+            self.cur += "<font face=\"Courier\">"
+
+    def handle_endtag(self, tag):
+        if tag in ("ul", "ol"):
+            if self.list_stack:
+                self.list_stack.pop()
+            return
+        if tag == "strong":
+            self.cur += "</b>"
+            return
+        if tag == "em":
+            self.cur += "</i>"
+            return
+        if tag == "code":
+            self.cur += "</font>"
+            return
+        if tag == "pre":
+            self.blocks.append({"type": "pre", "text": self.cur})
+            self.in_pre = False
+            self.cur_tag = None
+            self.cur = ""
+            return
+        if tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6", "li"):
+            if tag == "li":
+                bullet = None
+                if self.list_stack:
+                    top = self.list_stack[-1]
+                    if top["type"] == "ol":
+                        top["index"] += 1
+                        bullet = f"{top['index']}."
+                    else:
+                        bullet = "•"
+                self.blocks.append({"type": "li", "text": self.cur, "bullet": bullet})
+            else:
+                self.blocks.append({"type": tag, "text": self.cur})
+            self.cur_tag = None
+            self.cur = ""
+
+    def handle_data(self, data):
+        if not self.cur_tag:
+            return
+        if self.in_pre:
+            self.cur += data
+        else:
+            self.cur += (data or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _markdown_to_flowables(md_text: str) -> List[Any]:
+    if mdlib is None:
+        return [Preformatted(md_text or "", getSampleStyleSheet()["Code"])]
+    html = mdlib.markdown(md_text or "", extensions=["fenced_code", "tables"])
+    parser = _MdBlockParser()
+    parser.feed(html)
+    styles = getSampleStyleSheet()
+    flow: List[Any] = []
+
+    h1 = ParagraphStyle("H1", parent=styles["Heading1"], fontSize=18, spaceAfter=8)
+    h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontSize=15, spaceAfter=6)
+    h3 = ParagraphStyle("H3", parent=styles["Heading3"], fontSize=13, spaceAfter=6)
+    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10.5, leading=13)
+    code_style = styles["Code"]
+
+    for b in parser.blocks:
+        t = b.get("type")
+        text = b.get("text", "")
+        if t == "h1":
+            flow.append(Paragraph(text, h1))
+        elif t == "h2":
+            flow.append(Paragraph(text, h2))
+        elif t == "h3":
+            flow.append(Paragraph(text, h3))
+        elif t in ("h4", "h5", "h6"):
+            flow.append(Paragraph(text, body))
+        elif t == "p":
+            flow.append(Paragraph(text, body))
+        elif t == "li":
+            flow.append(Paragraph(text, body, bulletText=b.get("bullet") or "•"))
+        elif t == "pre":
+            flow.append(Preformatted(text, code_style))
+        flow.append(Spacer(1, 6))
+
+    if not flow:
+        flow.append(Paragraph("", body))
+    return flow
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="/static")
 
 
@@ -823,40 +944,22 @@ def api_note_pdf(note_id: str):
     if content_path and content_path.exists():
         content = content_path.read_text(encoding="utf-8", errors="ignore")
 
+    fmt = (request.args.get("format") or "md").strip().lower()
+    if fmt not in ("md", "txt"):
+        fmt = "md"
+
     buf = io.BytesIO()
     try:
-        c = canvas.Canvas(buf, pagesize=A4)
-        width, height = A4
-
-        font_name = "Courier"
-        font_size = 10
-        title_font = 14
-
-        left = 18 * mm
-        right = 18 * mm
-        top = 18 * mm
-        bottom = 18 * mm
-        max_w = width - left - right
-
-        y = height - top
-
-        c.setFont("Helvetica-Bold", title_font)
-        c.drawString(left, y, display)
-        y -= 10 * mm
-
-        c.setFont(font_name, font_size)
-        line_height = 4.2 * mm
-
-        wrapped = _pdf_wrap_lines(content, c, max_w, font_name, font_size)
-        for line in wrapped:
-            if y < bottom:
-                c.showPage()
-                y = height - top
-                c.setFont(font_name, font_size)
-            c.drawString(left, y, line)
-            y -= line_height
-
-        c.save()
+        doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=18 * mm, bottomMargin=18 * mm, title=display)
+        flow: List[Any] = []
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle("PdfTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=10)
+        flow.append(Paragraph(display, title_style))
+        if fmt == "txt":
+            flow.append(Preformatted(content or "", styles["Code"]))
+        else:
+            flow.extend(_markdown_to_flowables(content or ""))
+        doc.build(flow)
         buf.seek(0)
     except Exception as e:
         return jsonify({"error": "pdf_failed", "detail": str(e)}), 500

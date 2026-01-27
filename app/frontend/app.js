@@ -819,7 +819,7 @@ function fmtTime(iso){
   }
 
   function setPreviewFormat(fmt){
-    previewFormat = (fmt === "json" || fmt === "yaml" || fmt === "md") ? fmt : "md";
+    previewFormat = (fmt === "json" || fmt === "yaml" || fmt === "md" || fmt === "txt") ? fmt : "md";
     localStorage.setItem("sn_preview_format", previewFormat);
     if(elPreviewFormat){ elPreviewFormat.value = previewFormat; }
     if(previewMode){ renderPreview(); }
@@ -878,6 +878,11 @@ function fmtTime(iso){
       return;
     }
 
+    if(previewFormat === "txt"){
+      elPreview.innerHTML = `<pre><code class="language-text">${escapeHtml(text)}</code></pre>`;
+      return;
+    }
+
     elPreview.innerHTML = renderMarkdown(text);
   }
 
@@ -906,7 +911,8 @@ function fmtTime(iso){
 
     const noteId = t.noteId;
     const title = (t.meta?.title || "").trim() || (t.meta?.filename || "note");
-    fetch(`/api/notes/${encodeURIComponent(noteId)}/pdf`)
+    const format = (previewFormat === "md") ? "md" : "txt";
+    fetch(`/api/notes/${encodeURIComponent(noteId)}/pdf?format=${encodeURIComponent(format)}`)
       .then(async (r) => {
         if(!r.ok){
           let detail = "";
