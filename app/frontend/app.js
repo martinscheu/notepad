@@ -761,11 +761,20 @@ function fmtTime(iso){
         continue;
       }
 
-      const htmlHeading = line.match(/^<h([1-6])>([\s\S]*?)<\/h\1>$/i);
+      const lineTrim = line.trim();
+      const htmlHeading = lineTrim.match(/^<h([1-6])>([\s\S]*?)<\/h\1>$/i);
+      const htmlHeadingEsc = lineTrim.match(/^&lt;h([1-6])&gt;([\s\S]*?)&lt;\/h\1&gt;$/i);
       if(htmlHeading){
         flushList();
         const lvl = htmlHeading[1];
         const text = (htmlHeading[2] || "").trim();
+        out += `<h${lvl}>${inlineMd(text)}</h${lvl}>`;
+        continue;
+      }
+      if(htmlHeadingEsc){
+        flushList();
+        const lvl = htmlHeadingEsc[1];
+        const text = (htmlHeadingEsc[2] || "").trim();
         out += `<h${lvl}>${inlineMd(text)}</h${lvl}>`;
         continue;
       }
