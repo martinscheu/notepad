@@ -663,6 +663,15 @@ function fmtTime(iso){
   }
 
   function renderMarkdown(md){
+    const trimmed = (md || "").trim();
+    if(trimmed && (trimmed.startsWith("{") || trimmed.startsWith("["))){
+      try{
+        const parsed = JSON.parse(trimmed);
+        const pretty = JSON.stringify(parsed, null, 2);
+        return `<pre><code class="language-json">${escapeHtml(pretty)}</code></pre>`;
+      }catch(e){}
+    }
+
     const lines = (md || "").replace(/\r\n/g,"\n").split("\n");
     let out = "";
     let inCode = false;
@@ -749,6 +758,15 @@ function fmtTime(iso){
           out += "</tr>";
         }
         out += "</tbody></table>";
+        continue;
+      }
+
+      const htmlHeading = line.match(/^<h([1-6])>([\s\S]*?)<\/h\1>$/i);
+      if(htmlHeading){
+        flushList();
+        const lvl = htmlHeading[1];
+        const text = (htmlHeading[2] || "").trim();
+        out += `<h${lvl}>${inlineMd(text)}</h${lvl}>`;
         continue;
       }
 
