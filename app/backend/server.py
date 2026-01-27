@@ -18,6 +18,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
+try:
+    import yaml
+except Exception:
+    yaml = None
 
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 
@@ -318,6 +322,25 @@ def api_create_note():
     save_json(meta_path, meta)
     update_index_meta(meta)
     return jsonify(meta), 201
+
+
+@app.route("/api/preview/yaml", methods=["POST"])
+def api_preview_yaml():
+    if yaml is None:
+        return jsonify({"ok": False, "error": "PyYAML not installed"}), 500
+    body = request.get_json(silent=True) or {}
+    text = body.get("text", "")
+    if not str(text).strip():
+        return jsonify({"ok": False, "error": "Empty YAML"}), 200
+    try:
+        data = yaml.safe_load(text)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+    try:
+        pretty = yaml.safe_dump(data, sort_keys=False, allow_unicode=False)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+    return jsonify({"ok": True, "pretty": pretty})
 
 
 @app.route("/api/notes/import", methods=["POST"])

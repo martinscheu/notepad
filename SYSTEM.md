@@ -87,6 +87,7 @@ Volumes:
 - TOC panel with selectable depth and preview anchors
 - Markdown tables supported in preview
 - JSON pretty-print in preview when note content is valid JSON
+- YAML validation + pretty-print in preview when note content is valid YAML
 - Upload/import of `.md` and `.txt` files via UI (creates notes from files)
 - Active note highlighted in both tabs and notes list
 
@@ -95,4 +96,4 @@ Volumes:
 - Optional: add basic revision history
 
 ## Current Version
-- 1.1.21
+- 1.1.23

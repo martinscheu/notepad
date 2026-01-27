@@ -188,7 +188,7 @@ let deleteInProgress = false;
 
   function updateEditorValueAndSchedule(value){
     elEditor.value = value;
-    if(previewMode && elPreview){ elPreview.innerHTML = renderMarkdown(elEditor.value || ""); }
+    if(previewMode && elPreview){ renderPreview(); }
     const t = getActiveTab();
     if(!t) return;
     isTyping = true;
@@ -761,24 +761,6 @@ function fmtTime(iso){
         continue;
       }
 
-      const lineTrim = line.trim();
-      const htmlHeading = lineTrim.match(/^<h([1-6])>([\s\S]*?)<\/h\1>$/i);
-      const htmlHeadingEsc = lineTrim.match(/^&lt;h([1-6])&gt;([\s\S]*?)&lt;\/h\1&gt;$/i);
-      if(htmlHeading){
-        flushList();
-        const lvl = htmlHeading[1];
-        const text = (htmlHeading[2] || "").trim();
-        out += `<h${lvl}>${inlineMd(text)}</h${lvl}>`;
-        continue;
-      }
-      if(htmlHeadingEsc){
-        flushList();
-        const lvl = htmlHeadingEsc[1];
-        const text = (htmlHeadingEsc[2] || "").trim();
-        out += `<h${lvl}>${inlineMd(text)}</h${lvl}>`;
-        continue;
-      }
-
       if(/^---\s*$/.test(line) || /^\*\*\*\s*$/.test(line)){ flushList(); out += "<hr/>"; continue; }
 
       const h = line.match(/^(#{1,6})\s+(.*)$/);
@@ -821,12 +803,60 @@ function fmtTime(iso){
     return out;
   }
 
+  let previewToken = 0;
+  function looksLikeYaml(text){
+    const t = (text || "").trim();
+    if(!t) return false;
+    if(t.startsWith("{") || t.startsWith("[")) return false; // JSON handled elsewhere
+    if(t.startsWith("---")) return true;
+    if(t.includes("\n") && /:\s*\S?/.test(t)) return true;
+    return false;
+  }
+
+  async function renderPreview(){
+    if(!previewMode || !elPreview) return;
+    const text = elEditor.value || "";
+
+    if(looksLikeYaml(text)){
+      const token = ++previewToken;
+      elPreview.innerHTML = `<div class="muted">Validating YAML...</div>`;
+      try{
+        const r = await fetch("/api/preview/yaml", {
+          method: "POST",
+          headers: {"Content-Type":"application/json","Accept":"application/json"},
+          body: JSON.stringify({text})
+        });
+        if(token !== previewToken) return;
+        const data = await r.json().catch(() => ({}));
+        if(!r.ok){
+          const msg = (data && data.error) ? data.error : "YAML validation failed";
+          elPreview.innerHTML = `<div class="muted">YAML error: ${escapeHtml(msg)}</div>`;
+          return;
+        }
+        if(data && data.ok){
+          const pretty = data.pretty || "";
+          elPreview.innerHTML = `<pre><code class="language-yaml">${escapeHtml(pretty)}</code></pre>`;
+        } else {
+          const msg = (data && data.error) ? data.error : "Invalid YAML";
+          elPreview.innerHTML = `<div class="muted">YAML error: ${escapeHtml(msg)}</div>`;
+        }
+      }catch(e){
+        if(token !== previewToken) return;
+        const msg = e && e.message ? e.message : String(e);
+        elPreview.innerHTML = `<div class="muted">YAML error: ${escapeHtml(msg)}</div>`;
+      }
+      return;
+    }
+
+    elPreview.innerHTML = renderMarkdown(text);
+  }
+
   function setPreviewMode(on){
     previewMode = !!on;
     if(!elPreview) return;
 
     if(previewMode){
-      elPreview.innerHTML = renderMarkdown(elEditor.value || "");
+      renderPreview();
       elPreview.style.display = "block";
       elEditor.style.display = "none";
       if(elEditorHighlight) elEditorHighlight.style.display = "none";
@@ -1419,7 +1449,7 @@ async function renameNote(){
   bindRenameModal();
 
   elEditor.addEventListener("input", () => {
-    if(previewMode && elPreview){ elPreview.innerHTML = renderMarkdown(elEditor.value || ""); }
+    if(previewMode && elPreview){ renderPreview(); }
 
     const t = getActiveTab();
     if(!t) return;
