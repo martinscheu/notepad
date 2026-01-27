@@ -320,6 +320,70 @@ def api_create_note():
     return jsonify(meta), 201
 
 
+@app.route("/api/notes/import", methods=["POST"])
+def api_import_notes():
+    ensure_dirs()
+    files = request.files.getlist("files")
+    if not files:
+        return jsonify({"error": "No files provided"}), 400
+
+    created: List[Dict[str, Any]] = []
+    errors: List[Dict[str, str]] = []
+
+    for f in files:
+        filename = (f.filename or "").strip()
+        if not filename:
+            errors.append({"file": "", "error": "Missing filename"})
+            continue
+
+        safe_name = Path(filename).name
+        ext = Path(safe_name).suffix.lower().lstrip(".")
+        if ext not in ("md", "txt"):
+            errors.append({"file": safe_name, "error": "Unsupported file type"})
+            continue
+
+        try:
+            raw = f.read()
+            text = raw.decode("utf-8", errors="replace")
+        except Exception:
+            errors.append({"file": safe_name, "error": "Failed to read file"})
+            continue
+
+        created_dt = datetime.now(timezone.utc).replace(microsecond=0)
+        title = Path(safe_name).stem
+
+        for _ in range(20):
+            note_id = gen_id()
+            basename = mk_basename(note_id, user_title=title, created_dt=created_dt)
+            content_path = NOTES_DIR / f"{basename}.{ext}"
+            meta_path = NOTES_DIR / f"{basename}.json"
+            if not content_path.exists() and not meta_path.exists():
+                break
+        else:
+            errors.append({"file": safe_name, "error": "Failed to allocate note id"})
+            continue
+
+        atomic_write_text(content_path, text)
+        created_iso = created_dt.isoformat().replace("+00:00", "Z")
+        meta = {
+            "id": note_id,
+            "created": created_iso,
+            "updated": created_iso,
+            "rev": 1,
+            "filename": content_path.name,
+            "title": title,
+            "pinned": False,
+            "deleted": False,
+        }
+        save_json(meta_path, meta)
+        update_index_meta(meta)
+        created.append(meta)
+
+    if not created:
+        return jsonify({"error": "No valid files imported", "errors": errors}), 400
+    return jsonify({"created": created, "errors": errors})
+
+
 @app.route("/api/notes/<note_id>", methods=["GET"])
 def api_get_note(note_id: str):
     ensure_dirs()

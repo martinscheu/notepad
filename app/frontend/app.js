@@ -67,6 +67,8 @@ function renderTabsSafe(){
   const elTabsBar = $("tabsBar");
 
   const elNew = $("newNote");
+  const elUpload = $("uploadNote");
+  const elUploadInput = $("uploadInput");
   const elSelectAll = $("selectAll");
   const elSelectNone = $("selectNone");
   const elDownloadSelected = $("downloadSelected");
@@ -683,8 +685,32 @@ function fmtTime(iso){
       return x;
     };
 
-    for(const raw of lines){
-      const line = raw;
+    const splitTableRow = (line) => {
+      let s = (line || "").trim();
+      if(s.startsWith("|")) s = s.slice(1);
+      if(s.endsWith("|")) s = s.slice(0, -1);
+      return s.split("|").map(c => c.trim());
+    };
+    const isTableSep = (line) => {
+      if(!line || !line.includes("|")) return false;
+      let s = line.trim();
+      if(s.startsWith("|")) s = s.slice(1);
+      if(s.endsWith("|")) s = s.slice(0, -1);
+      if(!s.trim()) return false;
+      const parts = s.split("|").map(c => c.trim());
+      return parts.every(p => /^:?-{3,}:?$/.test(p));
+    };
+    const cellAlign = (cell) => {
+      const c = (cell || "").trim();
+      const left = c.startsWith(":");
+      const right = c.endsWith(":");
+      if(left && right) return "center";
+      if(right) return "right";
+      return "left";
+    };
+
+    for(let i = 0; i < lines.length; i++){
+      const line = lines[i];
 
       if(line.trim().startsWith("```")){
         if(inCode) flushCode();
@@ -692,6 +718,39 @@ function fmtTime(iso){
         continue;
       }
       if(inCode){ codeBuf.push(line); continue; }
+
+      const next = lines[i + 1];
+      if(next && isTableSep(next) && line.includes("|")){
+        flushList();
+        const headers = splitTableRow(line);
+        const aligns = splitTableRow(next).map(cellAlign);
+        const rows = [];
+        i += 2;
+        for(; i < lines.length; i++){
+          const rowLine = lines[i];
+          if(!rowLine || !rowLine.includes("|")) break;
+          if(rowLine.trim() === "") break;
+          rows.push(splitTableRow(rowLine));
+        }
+        i -= 1;
+
+        out += "<table><thead><tr>";
+        for(let c = 0; c < headers.length; c++){
+          const a = aligns[c] || "left";
+          out += `<th style="text-align:${a}">${inlineMd(headers[c] || "")}</th>`;
+        }
+        out += "</tr></thead><tbody>";
+        for(const row of rows){
+          out += "<tr>";
+          for(let c = 0; c < headers.length; c++){
+            const a = aligns[c] || "left";
+            out += `<td style="text-align:${a}">${inlineMd(row[c] || "")}</td>`;
+          }
+          out += "</tr>";
+        }
+        out += "</tbody></table>";
+        continue;
+      }
 
       if(/^---\s*$/.test(line) || /^\*\*\*\s*$/.test(line)){ flushList(); out += "<hr/>"; continue; }
 
@@ -834,9 +893,9 @@ function enableActions(enabled){
     elFileName.textContent = displayFilenameWithPin(meta);
   }
 
-  function makeNoteRow(meta){
+  function makeNoteRow(meta, isActive){
     const row = document.createElement("div");
-    row.className = "note-row" + (meta.pinned ? " pinned" : "");
+    row.className = "note-row" + (meta.pinned ? " pinned" : "") + (isActive ? " active" : "");
     row.dataset.id = meta.id;
 
     const cb = document.createElement("input");
@@ -886,8 +945,10 @@ function enableActions(enabled){
 function renderNotesList(){
     elNotesList.innerHTML = "";
     elNotesCount.textContent = `Notes: ${notes.length}`;
+    const activeNoteId = (getActiveTab && getActiveTab()) ? getActiveTab().noteId : null;
     for(const meta of notes){
-      elNotesList.appendChild(makeNoteRow(meta));
+      const isActive = activeNoteId && String(meta.id) === String(activeNoteId);
+      elNotesList.appendChild(makeNoteRow(meta, isActive));
     }
   }
 
@@ -948,6 +1009,9 @@ function renderTabs(){
       elEditor.disabled = true;
       elFileName.textContent = "-";
       setSaveState("Idle", "");
+      setPreviewMode(false);
+      if(elPreview) elPreview.innerHTML = "";
+      if(elEditorHighlight) elEditorHighlight.innerHTML = "";
       renderTabs();
       return;
     }
@@ -990,6 +1054,7 @@ function renderTabs(){
     enableActions(true);
     setPreviewMode(false);
     renderTabs();
+    renderNotesList();
     setStatus("Idle");
     updatePinButton();
     updateToc();
@@ -1172,6 +1237,60 @@ async function renameNote(){
     window.location.href = `/api/notes/${encodeURIComponent(t.noteId)}/download`;
   }
 
+  function isSupportedUploadFile(file){
+    const name = (file && file.name) ? file.name.toLowerCase() : "";
+    return name.endsWith(".md") || name.endsWith(".txt");
+  }
+
+  async function uploadFiles(files){
+    const list = Array.from(files || []);
+    if(!list.length) return;
+
+    const valid = list.filter(isSupportedUploadFile);
+    const invalid = list.filter((f) => !isSupportedUploadFile(f));
+
+    if(!valid.length){
+      alert("Only .md or .txt files are supported.");
+      return;
+    }
+
+    const fd = new FormData();
+    for(const f of valid){
+      fd.append("files", f, f.name);
+    }
+
+    setStatus("Uploading...");
+    try{
+      const r = await fetch("/api/notes/import", { method: "POST", body: fd });
+      if(!r.ok){
+        const msg = await r.text();
+        throw new Error(msg || "Upload failed");
+      }
+      const data = await r.json();
+      await loadNotes();
+      if(Array.isArray(data.created)){
+        for(const meta of data.created){
+          if(meta && meta.id){
+            await openNoteInNewTab(meta.id);
+          }
+        }
+      }
+      if(Array.isArray(data.errors) && data.errors.length){
+        const lines = data.errors.map(e => `${e.file || "file"}: ${e.error || "error"}`);
+        alert(`Some files were skipped:\n${lines.join("\n")}`);
+      }
+      if(invalid.length){
+        const names = invalid.map(f => f.name).join(", ");
+        alert(`Skipped unsupported files: ${names}`);
+      }
+      setStatus("Idle");
+    }catch(e){
+      console.error(e);
+      setStatus("Upload failed");
+      alert("Upload failed. Check console or server logs.");
+    }
+  }
+
   async function copyNoteLink(){
     const t = getActiveTab();
     if(!t) return;
@@ -1240,6 +1359,20 @@ async function renameNote(){
   elSort.addEventListener("change", () => loadNotes());
 
   elNew.addEventListener("click", createNote);
+  if(elUpload){
+    elUpload.addEventListener("click", () => {
+      if(elUploadInput){
+        elUploadInput.value = "";
+        elUploadInput.click();
+      }
+    });
+  }
+  if(elUploadInput){
+    elUploadInput.addEventListener("change", async () => {
+      await uploadFiles(elUploadInput.files);
+      elUploadInput.value = "";
+    });
+  }
   if(elSelectAll) elSelectAll.addEventListener("click", selectAll);
   if(elSelectNone) elSelectNone.addEventListener("click", selectNone);
   if(elDownloadSelected) elDownloadSelected.addEventListener("click", downloadSelected);

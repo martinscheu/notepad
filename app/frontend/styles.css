@@ -141,7 +141,7 @@ body{
   border-color: color-mix(in srgb, var(--accent), var(--border) 70%);
 }
 .note-row.active{
-  border-color: var(--accent);
+  border-color: var(--accent-color, var(--accent));
 }
 .note-row .title{
   font-size: 13px;
@@ -422,6 +422,9 @@ body{
 .preview pre code{background:transparent;border:0;padding:0;}
 .preview blockquote{margin:0.5em 0;padding:0.2em 0 0.2em 0.8em;border-left:3px solid var(--border);color:var(--muted);}
 .preview hr{border:0;border-top:1px solid var(--border);margin:0.9em 0;}
+.preview table{width:100%;border-collapse:collapse;margin:0.6em 0;font-size:0.95em;}
+.preview th,.preview td{border:1px solid var(--border);padding:6px 8px;vertical-align:top;}
+.preview thead th{background:var(--surface-2);font-weight:600;}
 
 
 .note-row{
@@ -836,7 +839,7 @@ body.dark .btn-ghost:hover { background: rgba(255,255,255,0.06); }
 
 /* Normalize accent color to green */
 :root {
-  --accent-color: #809398;
+  --accent-color: var(--accent);
 }
 
 .btn-primary,

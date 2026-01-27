@@ -85,10 +85,13 @@ Volumes:
 - Deep links supported via `/?id=<note_id>`
 - Search/replace panel with multi-match highlighting
 - TOC panel with selectable depth and preview anchors
+- Markdown tables supported in preview
+- Upload/import of `.md` and `.txt` files via UI (creates notes from files)
+- Active note highlighted in both tabs and notes list
 
 ## Next Steps
 - Optional: add SQLite FTS index for search if notes become large
 - Optional: add basic revision history
 
 ## Current Version
-- 1.1.16
+- 1.1.20
