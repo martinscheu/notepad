@@ -74,6 +74,7 @@ function renderTabsSafe(){
   const elDownloadSelected = $("downloadSelected");
   const elDeleteSelected = $("deleteSelected");
   const elPreviewToggle = $("previewToggle");
+  const elPreviewFormat = $("previewFormat");
   const elTocToggle = $("tocToggle");
   const elPdf = $("pdfNote");
   const elRename = $("renameNote");  const elDownload = $("downloadNote");  const elTheme = $("themeToggle");
@@ -108,6 +109,7 @@ function renderTabsSafe(){
   let pollTimer = null;
 
   let previewMode = false;
+  let previewFormat = (localStorage.getItem("sn_preview_format") || "md");
   selectedIds = new Set();
 let deleteInProgress = false;
 
@@ -663,15 +665,6 @@ function fmtTime(iso){
   }
 
   function renderMarkdown(md){
-    const trimmed = (md || "").trim();
-    if(trimmed && (trimmed.startsWith("{") || trimmed.startsWith("["))){
-      try{
-        const parsed = JSON.parse(trimmed);
-        const pretty = JSON.stringify(parsed, null, 2);
-        return `<pre><code class="language-json">${escapeHtml(pretty)}</code></pre>`;
-      }catch(e){}
-    }
-
     const lines = (md || "").replace(/\r\n/g,"\n").split("\n");
     let out = "";
     let inCode = false;
@@ -687,8 +680,16 @@ function fmtTime(iso){
       }
     };
     const inlineMd = (s) => {
-      let x = escapeHtml(s);
-      x = x.replace(/`([^`]+)`/g, (_m,c)=>`<code>${escapeHtml(c)}</code>`);
+      const parts = String(s || "").split("`");
+      let x = "";
+      for(let i = 0; i < parts.length; i++){
+        const seg = parts[i];
+        if(i % 2 === 1){
+          x += `<code>${escapeHtml(seg)}</code>`;
+        } else {
+          x += escapeHtml(seg);
+        }
+      }
       x = x.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
       x = x.replace(/\*([^*]+)\*/g, "<em>$1</em>");
       return x;
@@ -803,21 +804,19 @@ function fmtTime(iso){
     return out;
   }
 
-  let previewToken = 0;
-  function looksLikeYaml(text){
-    const t = (text || "").trim();
-    if(!t) return false;
-    if(t.startsWith("{") || t.startsWith("[")) return false; // JSON handled elsewhere
-    if(t.startsWith("---")) return true;
-    if(t.includes("\n") && /:\s*\S?/.test(t)) return true;
-    return false;
+  function setPreviewFormat(fmt){
+    previewFormat = (fmt === "json" || fmt === "yaml" || fmt === "md") ? fmt : "md";
+    localStorage.setItem("sn_preview_format", previewFormat);
+    if(elPreviewFormat){ elPreviewFormat.value = previewFormat; }
+    if(previewMode){ renderPreview(); }
   }
 
+  let previewToken = 0;
   async function renderPreview(){
     if(!previewMode || !elPreview) return;
     const text = elEditor.value || "";
 
-    if(looksLikeYaml(text)){
+    if(previewFormat === "yaml"){
       const token = ++previewToken;
       elPreview.innerHTML = `<div class="muted">Validating YAML...</div>`;
       try{
@@ -844,6 +843,23 @@ function fmtTime(iso){
         if(token !== previewToken) return;
         const msg = e && e.message ? e.message : String(e);
         elPreview.innerHTML = `<div class="muted">YAML error: ${escapeHtml(msg)}</div>`;
+      }
+      return;
+    }
+
+    if(previewFormat === "json"){
+      const trimmed = (text || "").trim();
+      if(!trimmed){
+        elPreview.innerHTML = "";
+        return;
+      }
+      try{
+        const parsed = JSON.parse(trimmed);
+        const pretty = JSON.stringify(parsed, null, 2);
+        elPreview.innerHTML = `<pre><code class="language-json">${escapeHtml(pretty)}</code></pre>`;
+      }catch(e){
+        const msg = e && e.message ? e.message : String(e);
+        elPreview.innerHTML = `<div class="muted">JSON error: ${escapeHtml(msg)}</div>`;
       }
       return;
     }
@@ -1445,6 +1461,9 @@ async function renameNote(){
   elFileView.addEventListener("click", () => setFileViewMode(fileView === "on" ? "off" : "on"));
   const elReplaceBtn = $("replaceBtn");
   if(elReplaceBtn) elReplaceBtn.addEventListener("click", openReplaceModal);
+  if(elPreviewFormat){
+    elPreviewFormat.addEventListener("change", () => setPreviewFormat(elPreviewFormat.value));
+  }
   bindReplaceModal();
   bindRenameModal();
 
@@ -1669,6 +1688,7 @@ async function init(){
     setMruMode(mruMode);
     setFileViewMode(fileView);
     setTocOpen(tocOpen === "on");
+    setPreviewFormat(previewFormat);
     enableActions(false);
     elEditor.disabled = true;
     setSaveState("Idle", "");
