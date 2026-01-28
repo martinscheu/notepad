@@ -915,6 +915,18 @@ body.dark .modal-card { background: #0f1317; border-color: rgba(255,255,255,0.10
 body.dark .modal-header { border-color: rgba(255,255,255,0.10); }
 .modal-title { font-size: 16px; font-weight: 600; }
 .modal-body { padding: 14px; display: grid; gap: 12px; }
+.settings-section-title{
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin-top: 6px;
+}
+.settings-divider{
+  height: 1px;
+  background: var(--border, rgba(0,0,0,0.10));
+  margin: 4px 0;
+}
 .form-row { display: grid; gap: 6px; }
 .form-row label { font-size: 13px; opacity: 0.85; }
 .form-row input, .form-row select {

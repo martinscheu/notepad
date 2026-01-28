@@ -182,6 +182,46 @@ def _markdown_to_flowables(md_text: str) -> List[Any]:
     if not flow:
         flow.append(Paragraph("", body))
     return flow
+
+
+def _make_numbered_canvas(header_left: str, header_right: str, footer_tpl: str):
+    class NumberedCanvas(canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._saved_page_states = []
+
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            num_pages = len(self._saved_page_states) + 1
+            for state in self._saved_page_states:
+                self.__dict__.update(state)
+                self._draw_header_footer(num_pages)
+                super().showPage()
+            self._draw_header_footer(num_pages)
+            super().save()
+
+        def _draw_header_footer(self, page_count: int):
+            page = self._pageNumber
+            width, height = self._pagesize
+            margin = 18 * mm
+            y_header = height - margin + 6
+            y_footer = margin - 12
+
+            if header_left or header_right:
+                self.setFont("Helvetica", 9)
+                if header_left:
+                    self.drawString(margin, y_header, header_left)
+                if header_right:
+                    self.drawRightString(width - margin, y_header, header_right)
+
+            self.setFont("Helvetica", 9)
+            footer_text = footer_tpl.format(page=page, pages=page_count)
+            self.drawCentredString(width / 2, y_footer, footer_text)
+
+    return NumberedCanvas
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="/static")
 
 
@@ -197,6 +237,7 @@ NOTES_DIR = DATA_DIR / "notes"
 TRASH_DIR = DATA_DIR / "trash"
 EXPORTS_DIR = DATA_DIR / "exports"
 INDEX_PATH = DATA_DIR / "index.json"
+PDF_SETTINGS_PATH = CONFIG_DIR / "pdf_settings.json"
 
 SAFE_TITLE_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
@@ -276,6 +317,31 @@ def load_index() -> Optional[List[Dict[str, Any]]]:
 def save_index(metas: List[Dict[str, Any]]) -> None:
     payload = {"version": 1, "notes": metas}
     atomic_write_text(INDEX_PATH, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+
+
+def _default_pdf_settings() -> Dict[str, Any]:
+    return {
+        "author": "",
+        "version": "",
+    }
+
+
+def load_pdf_settings() -> Dict[str, Any]:
+    try:
+        if PDF_SETTINGS_PATH.exists():
+            data = json.loads(PDF_SETTINGS_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                d = _default_pdf_settings()
+                d.update(data)
+                return d
+    except Exception:
+        pass
+    return _default_pdf_settings()
+
+
+def save_pdf_settings(data: Dict[str, Any]) -> None:
+    PDF_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(PDF_SETTINGS_PATH, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
 def rebuild_index() -> List[Dict[str, Any]]:
@@ -463,6 +529,23 @@ def api_preview_yaml():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 200
     return jsonify({"ok": True, "pretty": pretty})
+
+
+@app.route("/api/settings/pdf", methods=["GET"])
+def api_get_pdf_settings():
+    return jsonify(load_pdf_settings())
+
+
+@app.route("/api/settings/pdf", methods=["POST"])
+def api_set_pdf_settings():
+    body = request.get_json(silent=True) or {}
+    data = _default_pdf_settings()
+    data.update({
+        "author": str(body.get("author", "")).strip(),
+        "version": str(body.get("version", "")).strip(),
+    })
+    save_pdf_settings(data)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/notes/import", methods=["POST"])
@@ -948,9 +1031,29 @@ def api_note_pdf(note_id: str):
     if fmt not in ("md", "txt"):
         fmt = "md"
 
+    pdf_settings = load_pdf_settings()
+    author = (pdf_settings.get("author") or "").strip()
+    version = (pdf_settings.get("version") or "").strip()
+    header_left = display
+    header_right = ""
+    if author and version:
+        header_right = f"{author} • v{version}"
+    elif author:
+        header_right = author
+    elif version:
+        header_right = f"v{version}"
+
     buf = io.BytesIO()
     try:
-        doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=18 * mm, bottomMargin=18 * mm, title=display)
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=18 * mm,
+            rightMargin=18 * mm,
+            topMargin=24 * mm,
+            bottomMargin=20 * mm,
+            title=display,
+        )
         flow: List[Any] = []
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle("PdfTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=10)
@@ -959,7 +1062,8 @@ def api_note_pdf(note_id: str):
             flow.append(Preformatted(content or "", styles["Code"]))
         else:
             flow.extend(_markdown_to_flowables(content or ""))
-        doc.build(flow)
+        canvas_maker = _make_numbered_canvas(header_left, header_right, "Page {page} of {pages}")
+        doc.build(flow, canvasmaker=canvas_maker)
         buf.seek(0)
     except Exception as e:
         return jsonify({"error": "pdf_failed", "detail": str(e)}), 500

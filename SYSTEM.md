@@ -91,6 +91,7 @@ Volumes:
 - YAML validation + pretty-print in preview
 - Preview format includes plain text
 - PDF export uses Markdown rendering when preview format is Markdown, otherwise plain text
+- PDF settings (author/version) are stored server-side and used in PDF headers/footers
 - Notes grouped by Subject with collapsible groups in the sidebar
 - Upload/import of `.md` and `.txt` files via UI (creates notes from files)
 - Active note highlighted in both tabs and notes list
@@ -100,4 +101,4 @@ Volumes:
 - Optional: add basic revision history
 
 ## Current Version
-- 1.1.28
+- 1.1.30

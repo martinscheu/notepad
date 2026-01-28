@@ -1893,6 +1893,35 @@ async function loadSyncStatus(){
   }
 }
 
+async function loadPdfSettings(){
+  try{
+    const r = await fetch("/api/settings/pdf");
+    const j = await r.json();
+    $("pdfAuthor").value = j.author || "";
+    $("pdfVersion").value = j.version || "";
+    const s = $("pdfStatus");
+    if(s) s.textContent = "PDF: loaded";
+  }catch(e){
+    const s = $("pdfStatus");
+    if(s) s.textContent = "PDF: unavailable";
+  }
+}
+
+async function savePdfSettings(){
+  const payload = {
+    author: $("pdfAuthor").value.trim(),
+    version: $("pdfVersion").value.trim(),
+  };
+  const r = await fetch("/api/settings/pdf", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(payload)
+  });
+  const j = await r.json().catch(() => ({}));
+  const s = $("pdfStatus");
+  if(s) s.textContent = j.ok ? "PDF: saved" : ("PDF: error - " + (j.error||""));
+}
+
 async function saveSyncSettings(){
   const payload = {
     enabled: $("syncEnabled").checked,
@@ -1963,6 +1992,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
       openSyncModal();
       await loadSyncSettings();
       await loadSyncStatus();
+      await loadPdfSettings();
   await updateTopSyncStatus();
     });
   }
@@ -1978,6 +2008,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
   const s = $("syncSaveBtn"); if(s) s.addEventListener("click", saveSyncSettings);
   const t = $("syncTestBtn"); if(t) t.addEventListener("click", testSync);
   const r = $("syncRunBtn"); if(r) r.addEventListener("click", runSyncNow);
+  const p = $("pdfSaveBtn"); if(p) p.addEventListener("click", savePdfSettings);
 });
 
 

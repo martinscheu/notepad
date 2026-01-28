@@ -42,7 +42,7 @@
           <button id="copyLink" class="btn">Copy link</button>
         </div>
         <div class="action-group">
-          <button id="syncBtn" class="btn">Sync Settings</button>
+          <button id="syncBtn" class="btn">Settings</button>
           <button id="pauseSyncBtn" class="btn">Pause Sync</button>
         </div>
       </div>
@@ -152,7 +152,7 @@
     Sync: <span id="footerSyncSummary">disabled</span>
   </div>
   <div class="footer-line">
-    Version: 1.1.28
+    Version: 1.1.30
   </div>
 </div>
 
@@ -165,11 +165,12 @@
     <div class="modal-backdrop" data-close="sync"></div>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="syncTitle">
       <div class="modal-header">
-        <div class="modal-title" id="syncTitle">Sync (WebDAV)</div>
+        <div class="modal-title" id="syncTitle">Settings</div>
         <button class="btn btn-small" id="syncCloseBtn">Close</button>
       </div>
 
       <div class="modal-body">
+        <div class="settings-section-title">Sync (WebDAV)</div>
         <div class="form-row">
           <label class="checkbox">
             <input type="checkbox" id="syncEnabled">
@@ -223,12 +224,27 @@
         <div class="form-row">
           <div class="muted small" id="syncStatus">Status: not configured</div>
         </div>
+
+        <div class="settings-divider"></div>
+        <div class="settings-section-title">PDF</div>
+        <div class="form-row">
+          <label>Author</label>
+          <input type="text" id="pdfAuthor" autocomplete="off" placeholder="Your name">
+        </div>
+        <div class="form-row">
+          <label>Version</label>
+          <input type="text" id="pdfVersion" autocomplete="off" placeholder="1.1.28">
+        </div>
+        <div class="form-row">
+          <div class="muted small" id="pdfStatus">PDF: not configured</div>
+        </div>
       </div>
 
       <div class="modal-footer">
         <button class="btn" id="syncTestBtn">Test connection</button>
         <button class="btn" id="syncRunBtn">Sync now</button>
         <button class="btn btn-primary" id="syncSaveBtn">Save</button>
+        <button class="btn btn-primary" id="pdfSaveBtn">Save PDF</button>
       </div>
     </div>
   </div>
