@@ -463,6 +463,66 @@ let deleteInProgress = false;
     updateEditorHighlight();
   }
 
+  function getDefaultPdfMeta(){
+    return {
+      author: "",
+      company: "",
+      version: "",
+      date: "",
+      use_export_date: true,
+      tlp: "AMBER",
+    };
+  }
+
+  function applyPdfUseExportDateState(){
+    const useExport = $("pdfUseExportDate");
+    const dateInput = $("pdfDate");
+    if(!useExport || !dateInput) return;
+    dateInput.disabled = !!useExport.checked;
+    dateInput.classList.toggle("is-disabled", !!useExport.checked);
+  }
+
+  function setPdfFields(pdf){
+    const p = Object.assign(getDefaultPdfMeta(), (pdf || {}));
+    const author = $("pdfAuthor");
+    const company = $("pdfCompany");
+    const version = $("pdfVersion");
+    const date = $("pdfDate");
+    const useExport = $("pdfUseExportDate");
+    const tlp = $("pdfTlp");
+    if(author) author.value = p.author || "";
+    if(company) company.value = p.company || "";
+    if(version) version.value = p.version || "";
+    if(date) date.value = p.date || "";
+    if(useExport) useExport.checked = !!p.use_export_date;
+    if(tlp) tlp.value = (p.tlp || "AMBER").toUpperCase();
+    applyPdfUseExportDateState();
+  }
+
+  function readPdfFields(){
+    return {
+      author: ($("pdfAuthor")?.value || "").trim(),
+      company: ($("pdfCompany")?.value || "").trim(),
+      version: ($("pdfVersion")?.value || "").trim(),
+      date: ($("pdfDate")?.value || "").trim(),
+      use_export_date: !!$("pdfUseExportDate")?.checked,
+      tlp: (($("pdfTlp")?.value || "AMBER").trim().toUpperCase()),
+    };
+  }
+
+  async function loadPdfSettingsForActiveNote(){
+    const t = getActiveTab();
+    if(!t) return;
+    try{
+      const pdf = await apiGet(`/api/notes/${encodeURIComponent(t.noteId)}/pdf-settings`);
+      t.meta = t.meta || {};
+      t.meta.pdf = pdf;
+      setPdfFields(pdf);
+    }catch(e){
+      setPdfFields((t.meta && t.meta.pdf) || null);
+    }
+  }
+
   function openRenameModal(){
     const modal = document.getElementById("rename-modal");
     if(!modal) return;
@@ -479,6 +539,8 @@ let deleteInProgress = false;
     if(subjectInput){
       subjectInput.value = (t.meta && (t.meta.subject || "")) || "";
     }
+    setPdfFields((t.meta && t.meta.pdf) || null);
+    loadPdfSettingsForActiveNote();
   }
 
   function closeRenameModal(){
@@ -495,12 +557,24 @@ let deleteInProgress = false;
     const subjectInput = document.getElementById("subject-input");
     const newTitle = (input ? input.value : "").trim();
     const newSubject = (subjectInput ? subjectInput.value : "").trim();
+    const pdfPayload = readPdfFields();
     setStatus("Renaming...");
     try{
       const meta = await apiPut(
         `/api/notes/${encodeURIComponent(t.noteId)}/meta`,
         {user_title: newTitle, title: newTitle, subject: newSubject}
       );
+      try{
+        const pdfRes = await apiPut(
+          `/api/notes/${encodeURIComponent(t.noteId)}/pdf-settings`,
+          pdfPayload
+        );
+        if(pdfRes && pdfRes.pdf){
+          meta.pdf = pdfRes.pdf;
+        }
+      }catch(e){
+        console.error(e);
+      }
       t.meta = meta;
       t.rev = meta.rev || t.rev;
     setFileName(meta);
@@ -528,6 +602,8 @@ let deleteInProgress = false;
     if(cancelBtn) cancelBtn.addEventListener("click", closeRenameModal);
     const saveBtn = document.getElementById("rename-save");
     if(saveBtn) saveBtn.addEventListener("click", saveRenameFromModal);
+    const useExport = document.getElementById("pdfUseExportDate");
+    if(useExport) useExport.addEventListener("change", applyPdfUseExportDateState);
     const input = document.getElementById("rename-input");
     if(input) input.addEventListener("keydown", (e) => {
       if(e.key === "Enter"){
@@ -1040,6 +1116,33 @@ function enableActions(enabled){
   function setFileName(meta){
     if(!elFileName) return;
     elFileName.textContent = displayFilenameWithPin(meta);
+    setTlpBadge(meta);
+  }
+
+  function setTlpBadge(meta){
+    const badge = document.getElementById("tlpBadge");
+    if(!badge){
+      return;
+    }
+    if(!meta){
+      badge.classList.add("hidden");
+      return;
+    }
+    const tlpRaw = (meta.pdf && meta.pdf.tlp) ? String(meta.pdf.tlp) : "AMBER";
+    const tlp = tlpRaw.toUpperCase();
+    badge.textContent = `TLP: ${tlp}`;
+    badge.classList.remove("hidden", "tlp-clear", "tlp-green", "tlp-amber", "tlp-red");
+    if(tlp === "CLEAR"){
+      badge.classList.add("tlp-clear");
+    }else if(tlp === "GREEN"){
+      badge.classList.add("tlp-green");
+    }else if(tlp === "AMBER+STRICT"){
+      badge.classList.add("tlp-amber-strict");
+    }else if(tlp === "RED"){
+      badge.classList.add("tlp-red");
+    }else{
+      badge.classList.add("tlp-amber");
+    }
   }
 
   function makeNoteRow(meta, isActive){
@@ -1893,35 +1996,6 @@ async function loadSyncStatus(){
   }
 }
 
-async function loadPdfSettings(){
-  try{
-    const r = await fetch("/api/settings/pdf");
-    const j = await r.json();
-    $("pdfAuthor").value = j.author || "";
-    $("pdfVersion").value = j.version || "";
-    const s = $("pdfStatus");
-    if(s) s.textContent = "PDF: loaded";
-  }catch(e){
-    const s = $("pdfStatus");
-    if(s) s.textContent = "PDF: unavailable";
-  }
-}
-
-async function savePdfSettings(){
-  const payload = {
-    author: $("pdfAuthor").value.trim(),
-    version: $("pdfVersion").value.trim(),
-  };
-  const r = await fetch("/api/settings/pdf", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify(payload)
-  });
-  const j = await r.json().catch(() => ({}));
-  const s = $("pdfStatus");
-  if(s) s.textContent = j.ok ? "PDF: saved" : ("PDF: error - " + (j.error||""));
-}
-
 async function saveSyncSettings(){
   const payload = {
     enabled: $("syncEnabled").checked,
@@ -1992,8 +2066,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
       openSyncModal();
       await loadSyncSettings();
       await loadSyncStatus();
-      await loadPdfSettings();
-  await updateTopSyncStatus();
+      await updateTopSyncStatus();
     });
   }
   const c = $("syncCloseBtn");
@@ -2008,7 +2081,6 @@ document.addEventListener("DOMContentLoaded", ()=>{
   const s = $("syncSaveBtn"); if(s) s.addEventListener("click", saveSyncSettings);
   const t = $("syncTestBtn"); if(t) t.addEventListener("click", testSync);
   const r = $("syncRunBtn"); if(r) r.addEventListener("click", runSyncNow);
-  const p = $("pdfSaveBtn"); if(p) p.addEventListener("click", savePdfSettings);
 });
 
 

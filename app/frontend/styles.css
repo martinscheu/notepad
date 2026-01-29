@@ -82,6 +82,11 @@ body{
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 85%);
 }
 
+.input:disabled, .select:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn{
   height: 34px;
   border: 1px solid var(--border);
@@ -261,6 +266,44 @@ body{
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.tlp-badge{
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  line-height: 1.2;
+}
+.tlp-badge.hidden{
+  display: none;
+}
+.tlp-badge.tlp-clear{
+  background: #ffffff;
+  color: #000000;
+  border-color: #000000;
+}
+.tlp-badge.tlp-green{
+  background: #24a148;
+  color: #ffffff;
+  border-color: #24a148;
+}
+.tlp-badge.tlp-amber{
+  background: #f1c21b;
+  color: #000000;
+  border-color: #f1c21b;
+}
+.tlp-badge.tlp-amber-strict{
+  background: #e6ab00;
+  color: #000000;
+  border-color: #e6ab00;
+}
+.tlp-badge.tlp-red{
+  background: #da1e28;
+  color: #ffffff;
+  border-color: #da1e28;
 }
 
 .actions{
@@ -826,9 +869,9 @@ body{
 }
 
 
-/* Always hide the editor fileline bar ("File <name>") */
+/* Show the editor fileline bar for per-note metadata */
 .fileline {
-  display: none !important;
+  display: flex;
 }
 
 

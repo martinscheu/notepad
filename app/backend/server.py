@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
@@ -184,7 +185,15 @@ def _markdown_to_flowables(md_text: str) -> List[Any]:
     return flow
 
 
-def _make_numbered_canvas(header_left: str, header_right: str, footer_tpl: str):
+def _make_numbered_canvas(
+    header_left: str,
+    header_right: str,
+    footer_tpl: str,
+    footer_left_label: str = "",
+    footer_left_fill=None,
+    footer_left_text=None,
+    footer_left_border=None,
+):
     class NumberedCanvas(canvas.Canvas):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -216,6 +225,31 @@ def _make_numbered_canvas(header_left: str, header_right: str, footer_tpl: str):
                     self.drawString(margin, y_header, header_left)
                 if header_right:
                     self.drawRightString(width - margin, y_header, header_right)
+
+            if footer_left_label:
+                font_name = "Helvetica-Bold"
+                font_size = 8
+                padding_x = 4
+                padding_y = 2
+                text_width = pdfmetrics.stringWidth(footer_left_label, font_name, font_size)
+                box_w = text_width + (padding_x * 2)
+                box_h = font_size + (padding_y * 2)
+                box_x = margin
+                box_y = y_footer - padding_y - 1
+                self.saveState()
+                if footer_left_fill is not None:
+                    self.setFillColor(footer_left_fill)
+                if footer_left_border is not None:
+                    self.setStrokeColor(footer_left_border)
+                    stroke = 1
+                else:
+                    stroke = 0
+                self.rect(box_x, box_y, box_w, box_h, fill=1, stroke=stroke)
+                if footer_left_text is not None:
+                    self.setFillColor(footer_left_text)
+                self.setFont(font_name, font_size)
+                self.drawString(box_x + padding_x, box_y + padding_y, footer_left_label)
+                self.restoreState()
 
             self.setFont("Helvetica", 9)
             footer_text = footer_tpl.format(page=page, pages=page_count)
@@ -250,6 +284,7 @@ def ensure_dirs() -> None:
     NOTES_DIR.mkdir(parents=True, exist_ok=True)
     TRASH_DIR.mkdir(parents=True, exist_ok=True)
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    _maybe_migrate_pdf_settings()
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -319,29 +354,89 @@ def save_index(metas: List[Dict[str, Any]]) -> None:
     atomic_write_text(INDEX_PATH, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
 
 
-def _default_pdf_settings() -> Dict[str, Any]:
+def _default_pdf_meta() -> Dict[str, Any]:
     return {
         "author": "",
+        "company": "",
         "version": "",
+        "date": "",
+        "use_export_date": True,
+        "tlp": "AMBER",
     }
 
 
-def load_pdf_settings() -> Dict[str, Any]:
+def _normalize_pdf_meta(data: Any) -> Dict[str, Any]:
+    d = _default_pdf_meta()
+    if not isinstance(data, dict):
+        return d
+    d["author"] = str(data.get("author", "")).strip()
+    d["company"] = str(data.get("company", "")).strip()
+    d["version"] = str(data.get("version", "")).strip()
+    d["date"] = str(data.get("date", "")).strip()
+    d["use_export_date"] = bool(data.get("use_export_date", True))
+    tlp = str(data.get("tlp", "")).strip().upper()
+    if tlp not in ("CLEAR", "GREEN", "AMBER", "AMBER+STRICT", "RED"):
+        tlp = "AMBER"
+    d["tlp"] = tlp
+    return d
+
+
+def _tlp_style(tlp: str):
+    tlp = (tlp or "").upper()
+    if tlp == "CLEAR":
+        return (colors.white, colors.black, colors.black)
+    if tlp == "GREEN":
+        return (colors.HexColor("#24a148"), colors.white, None)
+    if tlp == "AMBER+STRICT":
+        return (colors.HexColor("#e6ab00"), colors.black, None)
+    if tlp == "RED":
+        return (colors.HexColor("#da1e28"), colors.white, None)
+    return (colors.HexColor("#f1c21b"), colors.black, None)
+
+
+_PDF_MIGRATION_DONE = False
+
+
+def _maybe_migrate_pdf_settings() -> None:
+    global _PDF_MIGRATION_DONE
+    if _PDF_MIGRATION_DONE:
+        return
+    _PDF_MIGRATION_DONE = True
+
+    if not PDF_SETTINGS_PATH.exists():
+        return
     try:
-        if PDF_SETTINGS_PATH.exists():
-            data = json.loads(PDF_SETTINGS_PATH.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                d = _default_pdf_settings()
-                d.update(data)
-                return d
+        data = json.loads(PDF_SETTINGS_PATH.read_text(encoding="utf-8"))
     except Exception:
-        pass
-    return _default_pdf_settings()
+        return
+    if not isinstance(data, dict):
+        return
 
+    base = _default_pdf_meta()
+    base["author"] = str(data.get("author", "")).strip()
+    base["version"] = str(data.get("version", "")).strip()
 
-def save_pdf_settings(data: Dict[str, Any]) -> None:
-    PDF_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(PDF_SETTINGS_PATH, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    needs_migration = False
+    for meta_path in NOTES_DIR.glob("*.json"):
+        try:
+            meta = load_json(meta_path)
+        except Exception:
+            continue
+        if not isinstance(meta.get("pdf"), dict):
+            needs_migration = True
+            break
+    if not needs_migration:
+        return
+
+    for meta_path in NOTES_DIR.glob("*.json"):
+        try:
+            meta = load_json(meta_path)
+        except Exception:
+            continue
+        if isinstance(meta.get("pdf"), dict):
+            continue
+        meta["pdf"] = dict(base)
+        save_json(meta_path, meta)
 
 
 def rebuild_index() -> List[Dict[str, Any]]:
@@ -504,6 +599,7 @@ def api_create_note():
         "filename": content_path.name,
         "title": "",
         "subject": "",
+        "pdf": _default_pdf_meta(),
         "pinned": False,
         "deleted": False,
     }
@@ -531,21 +627,36 @@ def api_preview_yaml():
     return jsonify({"ok": True, "pretty": pretty})
 
 
-@app.route("/api/settings/pdf", methods=["GET"])
-def api_get_pdf_settings():
-    return jsonify(load_pdf_settings())
+@app.route("/api/notes/<note_id>/pdf-settings", methods=["GET"])
+def api_get_note_pdf_settings(note_id: str):
+    ensure_dirs()
+    _content_path, meta_path, deleted = find_note_files_by_id(note_id)
+    if not meta_path:
+        return jsonify({"error": "Not found"}), 404
+    if deleted:
+        return jsonify({"error": "Note is deleted"}), 400
+    meta = load_json(meta_path)
+    pdf = _normalize_pdf_meta(meta.get("pdf", {}))
+    return jsonify(pdf)
 
 
-@app.route("/api/settings/pdf", methods=["POST"])
-def api_set_pdf_settings():
+@app.route("/api/notes/<note_id>/pdf-settings", methods=["PUT"])
+def api_set_note_pdf_settings(note_id: str):
+    ensure_dirs()
     body = request.get_json(silent=True) or {}
-    data = _default_pdf_settings()
-    data.update({
-        "author": str(body.get("author", "")).strip(),
-        "version": str(body.get("version", "")).strip(),
-    })
-    save_pdf_settings(data)
-    return jsonify({"ok": True})
+    _content_path, meta_path, deleted = find_note_files_by_id(note_id)
+    if not meta_path:
+        return jsonify({"error": "Not found"}), 404
+    if deleted:
+        return jsonify({"error": "Note is deleted"}), 400
+    meta = load_json(meta_path)
+    pdf = _normalize_pdf_meta(body)
+    meta["pdf"] = pdf
+    meta["updated"] = utc_now_iso()
+    meta["rev"] = int(meta.get("rev", 0)) + 1
+    save_json(meta_path, meta)
+    update_index_meta(meta)
+    return jsonify({"ok": True, "pdf": pdf, "updated": meta["updated"], "rev": meta["rev"]})
 
 
 @app.route("/api/notes/import", methods=["POST"])
@@ -601,6 +712,7 @@ def api_import_notes():
             "filename": content_path.name,
             "title": title,
             "subject": "",
+            "pdf": _default_pdf_meta(),
             "pinned": False,
             "deleted": False,
         }
@@ -1031,17 +1143,28 @@ def api_note_pdf(note_id: str):
     if fmt not in ("md", "txt"):
         fmt = "md"
 
-    pdf_settings = load_pdf_settings()
-    author = (pdf_settings.get("author") or "").strip()
-    version = (pdf_settings.get("version") or "").strip()
+    pdf_meta = _normalize_pdf_meta(meta.get("pdf", {}))
+    author = (pdf_meta.get("author") or "").strip()
+    company = (pdf_meta.get("company") or "").strip()
+    version = (pdf_meta.get("version") or "").strip()
+    date_str = (pdf_meta.get("date") or "").strip()
+    use_export_date = bool(pdf_meta.get("use_export_date", True))
+    tlp = (pdf_meta.get("tlp") or "AMBER").strip().upper()
     header_left = display
-    header_right = ""
-    if author and version:
-        header_right = f"{author} • v{version}"
-    elif author:
-        header_right = author
-    elif version:
-        header_right = f"v{version}"
+    header_right_parts: List[str] = []
+    if company:
+        header_right_parts.append(company)
+    if author:
+        header_right_parts.append(author)
+    if version:
+        header_right_parts.append(version if version.lower().startswith("v") else f"v{version}")
+    if use_export_date:
+        header_right_parts.append(datetime.now().date().isoformat())
+    elif date_str:
+        header_right_parts.append(date_str)
+    header_right = " • ".join([p for p in header_right_parts if p])
+    tlp_label = f"TLP: {tlp}"
+    tlp_fill, tlp_text, tlp_border = _tlp_style(tlp)
 
     buf = io.BytesIO()
     try:
@@ -1062,7 +1185,15 @@ def api_note_pdf(note_id: str):
             flow.append(Preformatted(content or "", styles["Code"]))
         else:
             flow.extend(_markdown_to_flowables(content or ""))
-        canvas_maker = _make_numbered_canvas(header_left, header_right, "Page {page} of {pages}")
+        canvas_maker = _make_numbered_canvas(
+            header_left,
+            header_right,
+            "Page {page} of {pages}",
+            footer_left_label=tlp_label,
+            footer_left_fill=tlp_fill,
+            footer_left_text=tlp_text,
+            footer_left_border=tlp_border,
+        )
         doc.build(flow, canvasmaker=canvas_maker)
         buf.seek(0)
     except Exception as e:
