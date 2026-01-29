@@ -2,6 +2,11 @@
 
 All notable changes to Stickynotes will be documented here.
 
+## 1.1.36
+- Preview: fixed bold parsing when text contains multiplication asterisks; reduced accidental italics.
+- PDF: prevent inline code tags from leaking into fenced code blocks.
+- PDF: improved wrapping to avoid text overflow (including long words and code blocks).
+
 ## 1.1.13
 - Reordered top-bar actions into grouped clusters with clearer spacing.
 - Added right-side Search & Replace panel (non-persistent) with match count.

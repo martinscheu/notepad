@@ -780,8 +780,11 @@ function fmtTime(iso){
           x += escapeHtml(seg);
         }
       }
-      x = x.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-      x = x.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+      x = x.replace(/\*\*([\s\S]+?)\*\*/g, (m, inner) => {
+        const safe = String(inner || "").replace(/\*/g, "&#42;");
+        return `<strong>${safe}</strong>`;
+      });
+      x = x.replace(/(^|[^*])\*([^\s*][^*]*?[^\s*])\*([^*]|$)/g, "$1<em>$2</em>$3");
       return x;
     };
 

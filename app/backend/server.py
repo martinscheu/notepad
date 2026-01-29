@@ -99,7 +99,8 @@ class _MdBlockParser(HTMLParser):
         elif tag == "em":
             self.cur += "<i>"
         elif tag == "code":
-            self.cur += "<font face=\"Courier\">"
+            if not self.in_pre:
+                self.cur += "<font face=\"Courier\">"
 
     def handle_endtag(self, tag):
         if tag in ("ul", "ol"):
@@ -113,7 +114,8 @@ class _MdBlockParser(HTMLParser):
             self.cur += "</i>"
             return
         if tag == "code":
-            self.cur += "</font>"
+            if not self.in_pre:
+                self.cur += "</font>"
             return
         if tag == "pre":
             self.blocks.append({"type": "pre", "text": self.cur})
@@ -148,7 +150,11 @@ class _MdBlockParser(HTMLParser):
 
 def _markdown_to_flowables(md_text: str) -> List[Any]:
     if mdlib is None:
-        return [Preformatted(md_text or "", getSampleStyleSheet()["Code"])]
+        styles = getSampleStyleSheet()
+        code_style = styles["Code"]
+        max_width = A4[0] - (18 * mm * 2)
+        wrapped = "\n".join(_pdf_wrap_lines(md_text or "", None, max_width, code_style.fontName, code_style.fontSize))
+        return [Preformatted(wrapped, code_style)]
     html = mdlib.markdown(md_text or "", extensions=["fenced_code", "tables"])
     parser = _MdBlockParser()
     parser.feed(html)
@@ -158,8 +164,16 @@ def _markdown_to_flowables(md_text: str) -> List[Any]:
     h1 = ParagraphStyle("H1", parent=styles["Heading1"], fontSize=18, spaceAfter=8)
     h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontSize=15, spaceAfter=6)
     h3 = ParagraphStyle("H3", parent=styles["Heading3"], fontSize=13, spaceAfter=6)
-    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10.5, leading=13)
+    body = ParagraphStyle(
+        "Body",
+        parent=styles["BodyText"],
+        fontSize=10.5,
+        leading=13,
+        splitLongWords=True,
+        wordWrap="CJK",
+    )
     code_style = styles["Code"]
+    max_width = A4[0] - (18 * mm * 2)
 
     for b in parser.blocks:
         t = b.get("type")
@@ -177,7 +191,8 @@ def _markdown_to_flowables(md_text: str) -> List[Any]:
         elif t == "li":
             flow.append(Paragraph(text, body, bulletText=b.get("bullet") or "•"))
         elif t == "pre":
-            flow.append(Preformatted(text, code_style))
+            wrapped = "\n".join(_pdf_wrap_lines(text or "", None, max_width, code_style.fontName, code_style.fontSize))
+            flow.append(Preformatted(wrapped, code_style))
         flow.append(Spacer(1, 6))
 
     if not flow:
@@ -1182,7 +1197,10 @@ def api_note_pdf(note_id: str):
         title_style = ParagraphStyle("PdfTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=10)
         flow.append(Paragraph(display, title_style))
         if fmt == "txt":
-            flow.append(Preformatted(content or "", styles["Code"]))
+            code_style = styles["Code"]
+            max_width = A4[0] - (18 * mm * 2)
+            wrapped = "\n".join(_pdf_wrap_lines(content or "", None, max_width, code_style.fontName, code_style.fontSize))
+            flow.append(Preformatted(wrapped, code_style))
         else:
             flow.extend(_markdown_to_flowables(content or ""))
         canvas_maker = _make_numbered_canvas(
