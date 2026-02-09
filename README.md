@@ -62,6 +62,16 @@ Open:
 - UI: `http://<host-ip>:8060/`
 - Health: `http://<host-ip>:8060/health`
 
+## GitHub Codespaces
+
+Click **Code > Codespaces > New codespace** on the repo. The devcontainer installs dependencies and creates data directories automatically. Once ready, run:
+
+```bash
+python -m app.backend.server
+```
+
+Port 8060 is forwarded and opens in the browser.
+
 ## Notes
 
 If scripts are not executable after unzip:

@@ -1,0 +1,17 @@
+{
+  "name": "Stickynotes",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -r app/backend/requirements.txt && mkdir -p data/notes/notes data/notes/trash data/notes/exports data/notes/sync data/config",
+  "forwardPorts": [8060],
+  "portsAttributes": {
+    "8060": {
+      "label": "Stickynotes",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "containerEnv": {
+    "DATA_DIR": "/workspaces/${localWorkspaceFolderBasename}/data/notes",
+    "CONFIG_DIR": "/workspaces/${localWorkspaceFolderBasename}/data/config",
+    "PORT": "8060"
+  }
+}
