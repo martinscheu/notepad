@@ -169,7 +169,7 @@ Notes:
 
 ### 7.1 Layout
 
-- **Top bar** – brand, search, action buttons, theme toggle
+- **Top bar** – brand, search, grouped action buttons (New/Upload, Preview, Rename/Pin/Download, More/Settings)
 - **Sidebar** – notes list grouped by subject, sortable, with bulk actions
 - **Tabs bar** – open notes as tabs, save state indicator
 - **Editor** – plain textarea with optional preview
@@ -215,7 +215,7 @@ Filtering:
   - Light edits
 - Editor model:
   - Plain text editor
-  - Toggle preview with format selection (Markdown, Text, JSON, YAML)
+  - Toggle preview; format selection (Markdown, Text, JSON, YAML) in More menu
 - No WYSIWYG editor required
 
 ---
@@ -285,7 +285,7 @@ Filtering:
 | Ctrl+N | New note |
 | Ctrl+K | Search / find in note |
 | Ctrl+H | Search & Replace panel |
-| Ctrl+Shift+R | Rename & Metadata modal |
+| Ctrl+Shift+R | Rename modal |
 | Ctrl+X | Close current tab |
 | Esc | Clear search / close dialogs |
 

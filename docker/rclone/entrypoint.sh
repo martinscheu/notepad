@@ -103,20 +103,26 @@ run_sync(){
   make_conf "${url}" "${user}" "${pass_plain}" "${vendor}"
   remote="webdav:${remote_path}"
 
-  extra=""
-  if [ "${no_deletes}" = "true" ]; then
-    # safety: avoid deleting destination items
-    extra="--ignore-existing"
-  fi
-
-  log "sync start mode=${mode} remote=${remote}"
+  log "sync start mode=${mode} remote=${remote} no_deletes=${no_deletes}"
 
   if [ "${mode}" = "pull" ]; then
-    rclone sync "${remote}" "${NOTES_DIR}" --config "${RCLONE_CONF}" ${extra} >> "${LOG_FILE}" 2>&1
+    if [ "${no_deletes}" = "true" ]; then
+      rclone copy "${remote}" "${NOTES_DIR}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
+    else
+      rclone sync "${remote}" "${NOTES_DIR}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
+    fi
   elif [ "${mode}" = "bisync" ]; then
-    rclone bisync "${NOTES_DIR}" "${remote}" --workdir "${WORKDIR}" --config "${RCLONE_CONF}" --check-access --fast-list >> "${LOG_FILE}" 2>&1
+    bisync_extra=""
+    if [ "${no_deletes}" = "true" ]; then
+      bisync_extra="--no-cleanup"
+    fi
+    rclone bisync "${NOTES_DIR}" "${remote}" --workdir "${WORKDIR}" --config "${RCLONE_CONF}" --check-access --fast-list ${bisync_extra} >> "${LOG_FILE}" 2>&1
   else
-    rclone sync "${NOTES_DIR}" "${remote}" --config "${RCLONE_CONF}" ${extra} >> "${LOG_FILE}" 2>&1
+    if [ "${no_deletes}" = "true" ]; then
+      rclone copy "${NOTES_DIR}" "${remote}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
+    else
+      rclone sync "${NOTES_DIR}" "${remote}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
+    fi
   fi
 
   log "sync done"

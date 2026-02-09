@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import base64
+import fcntl
 import io
 import json
+import logging
+import logging.handlers
 import time
 import os
 import re
@@ -12,6 +16,42 @@ from html.parser import HTMLParser
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional, Tuple
+
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+
+
+# --- Structured JSON logging ---
+class _JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        entry: Dict[str, Any] = {
+            "ts": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "level": record.levelname,
+            "msg": record.getMessage(),
+        }
+        if hasattr(record, "event"):
+            entry["event"] = record.event  # type: ignore[attr-defined]
+        if hasattr(record, "extra_data"):
+            entry.update(record.extra_data)  # type: ignore[attr-defined]
+        if record.exc_info and record.exc_info[1]:
+            entry["error"] = str(record.exc_info[1])
+        return json.dumps(entry, ensure_ascii=False)
+
+
+def _setup_logging() -> None:
+    handler = logging.StreamHandler()
+    handler.setFormatter(_JsonFormatter())
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+    # Quiet noisy libraries
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
+
+
+_setup_logging()
+log = logging.getLogger("stickynotes")
 
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from reportlab.pdfgen import canvas
@@ -326,6 +366,7 @@ TRASH_DIR = DATA_DIR / "trash"
 EXPORTS_DIR = DATA_DIR / "exports"
 INDEX_PATH = DATA_DIR / "index.json"
 PDF_SETTINGS_PATH = CONFIG_DIR / "pdf_settings.json"
+ENCRYPTION_SETTINGS_PATH = CONFIG_DIR / "encryption.json"
 
 SAFE_TITLE_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
@@ -339,6 +380,92 @@ def ensure_dirs() -> None:
     TRASH_DIR.mkdir(parents=True, exist_ok=True)
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
     _maybe_migrate_pdf_settings()
+
+
+# ---------- Encryption helpers ----------
+_ENCRYPTION_SALT = b"stickynotes-encryption-v1"
+_fernet_cache: Optional[Fernet] = None
+_fernet_passphrase_hash: Optional[str] = None
+
+
+def _derive_fernet_key(passphrase: str) -> bytes:
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=_ENCRYPTION_SALT,
+        iterations=480_000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(passphrase.encode("utf-8")))
+    return key
+
+
+def _load_encryption_settings() -> Dict[str, Any]:
+    if not ENCRYPTION_SETTINGS_PATH.exists():
+        return {}
+    try:
+        return json.loads(ENCRYPTION_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_encryption_settings(data: Dict[str, Any]) -> None:
+    ENCRYPTION_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(ENCRYPTION_SETTINGS_PATH, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+
+def _invalidate_fernet_cache() -> None:
+    global _fernet_cache, _fernet_passphrase_hash
+    _fernet_cache = None
+    _fernet_passphrase_hash = None
+
+
+def _get_fernet() -> Optional[Fernet]:
+    global _fernet_cache, _fernet_passphrase_hash
+    settings = _load_encryption_settings()
+    passphrase = settings.get("passphrase", "")
+    if not passphrase:
+        _fernet_cache = None
+        _fernet_passphrase_hash = None
+        return None
+    # Cache: only re-derive if passphrase changed
+    if _fernet_cache is not None and _fernet_passphrase_hash == passphrase:
+        return _fernet_cache
+    key = _derive_fernet_key(passphrase)
+    _fernet_cache = Fernet(key)
+    _fernet_passphrase_hash = passphrase
+    return _fernet_cache
+
+
+def encrypt_content(plaintext: str) -> str:
+    f = _get_fernet()
+    if f is None:
+        raise ValueError("No encryption key configured")
+    return f.encrypt(plaintext.encode("utf-8")).decode("ascii")
+
+
+def decrypt_content(ciphertext: str) -> str:
+    f = _get_fernet()
+    if f is None:
+        raise ValueError("No encryption key configured")
+    return f.decrypt(ciphertext.encode("ascii")).decode("utf-8")
+
+
+def read_note_content(content_path: Path, meta: Dict[str, Any]) -> str:
+    raw = content_path.read_text(encoding="utf-8", errors="ignore")
+    if meta.get("encrypted"):
+        try:
+            return decrypt_content(raw.strip())
+        except (InvalidToken, ValueError, Exception):
+            return "[Decryption failed — wrong passphrase or corrupt data]"
+    return raw
+
+
+def write_note_content(content_path: Path, content: str, meta: Dict[str, Any]) -> None:
+    if meta.get("encrypted"):
+        data = encrypt_content(content)
+    else:
+        data = content
+    atomic_write_text(content_path, data)
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -493,37 +620,60 @@ def _maybe_migrate_pdf_settings() -> None:
         save_json(meta_path, meta)
 
 
+_INDEX_LOCK_PATH = DATA_DIR / ".index.lock"
+
+
+class _index_lock:
+    """Context manager for file-based locking around index operations."""
+    def __enter__(self):
+        _INDEX_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self._f = open(_INDEX_LOCK_PATH, "w")
+        fcntl.flock(self._f.fileno(), fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        fcntl.flock(self._f.fileno(), fcntl.LOCK_UN)
+        self._f.close()
+        return False
+
+
 def rebuild_index() -> List[Dict[str, Any]]:
-    metas = []
-    for base_dir, deleted in [(NOTES_DIR, False), (TRASH_DIR, True)]:
-        for meta in base_dir.glob("*.json"):
-            try:
-                m = load_json(meta)
-            except Exception:
-                continue
-            m["deleted"] = bool(m.get("deleted", deleted))
-            metas.append(m)
-    save_index(metas)
-    return metas
+    with _index_lock():
+        metas = []
+        for base_dir, deleted in [(NOTES_DIR, False), (TRASH_DIR, True)]:
+            for meta in base_dir.glob("*.json"):
+                try:
+                    m = load_json(meta)
+                except Exception:
+                    continue
+                m["deleted"] = bool(m.get("deleted", deleted))
+                metas.append(m)
+        save_index(metas)
+        return metas
 
 
 def update_index_meta(meta: Dict[str, Any]) -> None:
-    metas = load_index()
-    if metas is None:
-        rebuild_index()
-        return
-    note_id = meta.get("id")
-    if not note_id:
-        return
-    updated = False
-    for i, m in enumerate(metas):
-        if m.get("id") == note_id:
-            metas[i] = meta
-            updated = True
-            break
-    if not updated:
-        metas.append(meta)
-    save_index(metas)
+    with _index_lock():
+        metas = load_index()
+        if metas is None:
+            # Fall through to rebuild (which acquires its own lock via reentrant path)
+            pass
+        else:
+            note_id = meta.get("id")
+            if not note_id:
+                return
+            updated = False
+            for i, m in enumerate(metas):
+                if m.get("id") == note_id:
+                    metas[i] = meta
+                    updated = True
+                    break
+            if not updated:
+                metas.append(meta)
+            save_index(metas)
+            return
+    # Outside lock: rebuild if index was missing
+    rebuild_index()
 
 
 def find_note_files_by_id(note_id: str) -> Tuple[Optional[Path], Optional[Path], bool]:
@@ -605,7 +755,7 @@ def api_list_notes():
             content_path, _, _ = find_note_files_by_id(note_id)
             if content_path and content_path.exists():
                 try:
-                    txt = content_path.read_text(encoding="utf-8", errors="ignore").lower()
+                    txt = read_note_content(content_path, m).lower()
                     if q in txt:
                         filtered.append(m)
                 except Exception:
@@ -656,9 +806,11 @@ def api_create_note():
         "pdf": _default_pdf_meta(),
         "pinned": False,
         "deleted": False,
+        "encrypted": False,
     }
     save_json(meta_path, meta)
     update_index_meta(meta)
+    log.info("Note created", extra={"event": "note_created", "extra_data": {"note_id": note_id, "filename": content_path.name}})
     return jsonify(meta), 201
 
 
@@ -710,7 +862,23 @@ def api_set_note_pdf_settings(note_id: str):
     meta["rev"] = int(meta.get("rev", 0)) + 1
     save_json(meta_path, meta)
     update_index_meta(meta)
-    return jsonify({"ok": True, "pdf": pdf, "updated": meta["updated"], "rev": meta["rev"]})
+
+    # TLP:RED auto-encryption
+    if pdf.get("tlp") == "RED" and not meta.get("encrypted") and _get_fernet() is not None:
+        try:
+            content = ""
+            if _content_path and _content_path.exists():
+                content = read_note_content(_content_path, {"encrypted": False})
+            meta["encrypted"] = True
+            meta["updated"] = utc_now_iso()
+            meta["rev"] = int(meta.get("rev", 0)) + 1
+            write_note_content(_content_path, content, meta)
+            save_json(meta_path, meta)
+            update_index_meta(meta)
+        except Exception:
+            pass
+
+    return jsonify({"ok": True, "pdf": pdf, "updated": meta["updated"], "rev": meta["rev"], "meta": meta})
 
 
 @app.route("/api/notes/import", methods=["POST"])
@@ -769,6 +937,7 @@ def api_import_notes():
             "pdf": _default_pdf_meta(),
             "pinned": False,
             "deleted": False,
+            "encrypted": False,
         }
         save_json(meta_path, meta)
         update_index_meta(meta)
@@ -776,6 +945,7 @@ def api_import_notes():
 
     if not created:
         return jsonify({"error": "No valid files imported", "errors": errors}), 400
+    log.info("Import completed", extra={"event": "import", "extra_data": {"count": len(created), "errors": len(errors)}})
     return jsonify({"created": created, "errors": errors})
 
 
@@ -790,7 +960,7 @@ def api_get_note(note_id: str):
     meta["deleted"] = bool(meta.get("deleted", deleted))
     content = ""
     if content_path and content_path.exists():
-        content = content_path.read_text(encoding="utf-8", errors="ignore")
+        content = read_note_content(content_path, meta)
     return jsonify({"meta": meta, "content": content})
 
 
@@ -817,7 +987,7 @@ def api_save_content(note_id: str):
             return jsonify({"error": "Corrupt note (missing filename)"}), 500
         content_path = NOTES_DIR / fn
 
-    atomic_write_text(content_path, content)
+    write_note_content(content_path, content, meta)
     save_json(meta_path, meta)
     update_index_meta(meta)
     return jsonify({"rev": meta["rev"], "updated": meta["updated"], "base_rev": base_rev})
@@ -885,6 +1055,7 @@ def api_update_meta(note_id: str):
 
     save_json(meta_path, meta)
     update_index_meta(meta)
+    log.info("Note metadata updated", extra={"event": "note_meta_updated", "extra_data": {"note_id": note_id, "title": meta.get("title", "")}})
     return jsonify(meta)
 
 
@@ -910,6 +1081,7 @@ def api_delete_note(note_id: str):
     shutil.move(str(meta_path), str(target_meta))
     save_json(target_meta, meta)
     update_index_meta(meta)
+    log.info("Note deleted", extra={"event": "note_deleted", "extra_data": {"note_id": note_id}})
 
     return jsonify({"ok": True})
 
@@ -936,6 +1108,7 @@ def api_restore_note(note_id: str):
     shutil.move(str(meta_path), str(target_meta))
     save_json(target_meta, meta)
     update_index_meta(meta)
+    log.info("Note restored", extra={"event": "note_restored", "extra_data": {"note_id": note_id}})
 
     return jsonify({"ok": True})
 
@@ -951,7 +1124,7 @@ def api_download_note(note_id: str):
 
     content = ""
     if content_path and content_path.exists():
-        content = content_path.read_text(encoding="utf-8", errors="ignore")
+        content = read_note_content(content_path, meta)
 
     title = (meta.get("title") or "").strip()
     if title:
@@ -978,11 +1151,29 @@ def api_export_all():
             if base_dir == TRASH_DIR and not include_deleted:
                 continue
             for p in base_dir.iterdir():
-                if p.is_file() and (p.suffix in [".md", ".txt", ".json"]):
+                if p.is_file() and p.suffix == ".json":
                     z.write(p, arcname=f"{folder}/{p.name}")
+                elif p.is_file() and p.suffix in (".md", ".txt"):
+                    # Decrypt content for export
+                    meta_path = p.with_suffix(".json")
+                    meta = {}
+                    if meta_path.exists():
+                        try:
+                            meta = load_json(meta_path)
+                        except Exception:
+                            pass
+                    if meta.get("encrypted"):
+                        try:
+                            plaintext = read_note_content(p, meta)
+                            z.writestr(f"{folder}/{p.name}", plaintext.encode("utf-8"))
+                        except Exception:
+                            z.write(p, arcname=f"{folder}/{p.name}")
+                    else:
+                        z.write(p, arcname=f"{folder}/{p.name}")
 
     buf.seek(0)
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    log.info("Export all triggered", extra={"event": "export_all", "extra_data": {"include_deleted": include_deleted}})
     return send_file(
         buf,
         mimetype="application/zip",
@@ -1008,9 +1199,23 @@ def api_export_selected():
             if meta_path and meta_path.exists():
                 zf.write(meta_path, arcname=meta_path.name)
             if content_path and content_path.exists():
-                zf.write(content_path, arcname=content_path.name)
+                meta = {}
+                if meta_path and meta_path.exists():
+                    try:
+                        meta = load_json(meta_path)
+                    except Exception:
+                        pass
+                if meta.get("encrypted"):
+                    try:
+                        plaintext = read_note_content(content_path, meta)
+                        zf.writestr(content_path.name, plaintext.encode("utf-8"))
+                    except Exception:
+                        zf.write(content_path, arcname=content_path.name)
+                else:
+                    zf.write(content_path, arcname=content_path.name)
 
     mem.seek(0)
+    log.info("Export selected triggered", extra={"event": "export_selected", "extra_data": {"count": len(ids)}})
     return send_file(mem, mimetype="application/zip", as_attachment=True, download_name="notes-selected.zip")
 
 
@@ -1047,6 +1252,8 @@ def api_get_sync_settings():
                 j = json.load(f)
             d = _default_sync_settings()
             d.update(j or {})
+            if d.get("password"):
+                d["password"] = "********"
             return jsonify(d)
         except Exception:
             return jsonify(_default_sync_settings())
@@ -1057,13 +1264,24 @@ def api_set_sync_settings():
     _ensure_sync_dirs()
     try:
         payload = request.get_json(force=True) or {}
+        # Preserve existing password if masked value sent back
+        password = str(payload.get("password", ""))
+        if password == "********":
+            existing = _default_sync_settings()
+            if os.path.exists(SYNC_SETTINGS):
+                try:
+                    with open(SYNC_SETTINGS, "r", encoding="utf-8") as f:
+                        existing.update(json.load(f) or {})
+                except Exception:
+                    pass
+            password = existing.get("password", "")
         d = _default_sync_settings()
         d.update({
             "enabled": bool(payload.get("enabled", False)),
             "webdav_url": str(payload.get("webdav_url","")).strip(),
             "remote_path": str(payload.get("remote_path","")).strip(),
             "username": str(payload.get("username","")).strip(),
-            "password": str(payload.get("password","")),
+            "password": password,
             "mode": str(payload.get("mode","push")).strip() or "push",
             "interval_s": int(payload.get("interval_s", 60) or 60),
             "no_deletes": bool(payload.get("no_deletes", True)),
@@ -1072,6 +1290,7 @@ def api_set_sync_settings():
             d["interval_s"] = 10
         with open(SYNC_SETTINGS, "w", encoding="utf-8") as f:
             json.dump(d, f, indent=2)
+        log.info("Sync settings saved", extra={"event": "sync_settings_saved", "extra_data": {"enabled": d["enabled"], "mode": d["mode"], "webdav_url": d["webdav_url"]}})
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -1169,6 +1388,141 @@ def api_sync_test():
         return jsonify({"ok": False, "error": str(e)}), 400
 
 
+# ---------- Encryption settings API ----------
+@app.route("/api/encryption/settings", methods=["GET"])
+def api_get_encryption_settings():
+    settings = _load_encryption_settings()
+    has_key = bool(settings.get("passphrase", ""))
+    encrypted_count = 0
+    if has_key:
+        metas = list_metas(include_deleted=False)
+        encrypted_count = sum(1 for m in metas if m.get("encrypted"))
+    return jsonify({"has_key": has_key, "encrypted_count": encrypted_count})
+
+
+@app.route("/api/encryption/settings", methods=["POST"])
+def api_set_encryption_settings():
+    body = request.get_json(silent=True) or {}
+    passphrase = str(body.get("passphrase", "")).strip()
+    if not passphrase:
+        return jsonify({"error": "Passphrase cannot be empty"}), 400
+    old_settings = _load_encryption_settings()
+    old_passphrase = old_settings.get("passphrase", "")
+    had_key = bool(old_passphrase)
+    if had_key:
+        current = str(body.get("current_passphrase", "")).strip()
+        if current != old_passphrase:
+            return jsonify({"error": "Current passphrase is incorrect"}), 403
+    key_changed = had_key and old_passphrase != passphrase
+    _save_encryption_settings({"passphrase": passphrase})
+    _invalidate_fernet_cache()
+    log.info("Encryption passphrase saved", extra={"event": "encryption_settings_saved"})
+    result: Dict[str, Any] = {"ok": True}
+    if key_changed:
+        result["warning"] = "key_changed"
+    return jsonify(result)
+
+
+@app.route("/api/encryption/settings", methods=["DELETE"])
+def api_delete_encryption_settings():
+    """Disable encryption: decrypt all encrypted notes, then remove the key."""
+    body = request.get_json(silent=True) or {}
+    current = str(body.get("current_passphrase", "")).strip()
+    old_settings = _load_encryption_settings()
+    old_passphrase = old_settings.get("passphrase", "")
+    if not old_passphrase:
+        return jsonify({"error": "No encryption key configured"}), 400
+    if current != old_passphrase:
+        return jsonify({"error": "Passphrase is incorrect"}), 403
+
+    # Decrypt all encrypted notes
+    ensure_dirs()
+    decrypted = 0
+    errors = 0
+    for base_dir in [NOTES_DIR, TRASH_DIR]:
+        for meta_path in base_dir.glob("*.json"):
+            try:
+                meta = load_json(meta_path)
+            except Exception:
+                continue
+            if not meta.get("encrypted"):
+                continue
+            note_id = meta.get("id", "")
+            fn = meta.get("filename", "")
+            content_path = meta_path.with_suffix(".md")
+            if not content_path.exists():
+                content_path = meta_path.with_suffix(".txt")
+            if content_path.exists():
+                try:
+                    plaintext = read_note_content(content_path, meta)
+                    meta["encrypted"] = False
+                    atomic_write_text(content_path, plaintext)
+                    save_json(meta_path, meta)
+                    update_index_meta(meta)
+                    decrypted += 1
+                except Exception:
+                    errors += 1
+            else:
+                meta["encrypted"] = False
+                save_json(meta_path, meta)
+                update_index_meta(meta)
+
+    # Remove the key
+    _save_encryption_settings({})
+    _invalidate_fernet_cache()
+    log.info("Encryption disabled", extra={"event": "encryption_disabled", "extra_data": {"decrypted": decrypted, "errors": errors}})
+    result: Dict[str, Any] = {"ok": True, "decrypted": decrypted}
+    if errors:
+        result["errors"] = errors
+        result["warning"] = f"{errors} note(s) could not be decrypted"
+    return jsonify(result)
+
+
+@app.route("/api/notes/<note_id>/encrypt", methods=["PUT"])
+def api_toggle_encryption(note_id: str):
+    ensure_dirs()
+    body = request.get_json(silent=True) or {}
+    want_encrypted = bool(body.get("encrypted", False))
+
+    content_path, meta_path, deleted = find_note_files_by_id(note_id)
+    if not meta_path:
+        return jsonify({"error": "Not found"}), 404
+    if deleted:
+        return jsonify({"error": "Note is deleted"}), 400
+
+    meta = load_json(meta_path)
+    is_encrypted = bool(meta.get("encrypted"))
+
+    if want_encrypted == is_encrypted:
+        return jsonify({"ok": True, "encrypted": is_encrypted})
+
+    if want_encrypted and _get_fernet() is None:
+        return jsonify({"error": "No encryption key configured. Set a passphrase in Settings first."}), 400
+
+    # Read current content (decrypting if needed)
+    content = ""
+    if content_path and content_path.exists():
+        content = read_note_content(content_path, meta)
+
+    # Flip the flag
+    meta["encrypted"] = want_encrypted
+    meta["updated"] = utc_now_iso()
+    meta["rev"] = int(meta.get("rev", 0)) + 1
+
+    # Re-write content in new state
+    if content_path is None:
+        fn = meta.get("filename")
+        if not fn:
+            return jsonify({"error": "Corrupt note (missing filename)"}), 500
+        content_path = NOTES_DIR / fn
+
+    write_note_content(content_path, content, meta)
+    save_json(meta_path, meta)
+    update_index_meta(meta)
+    log.info("Note encryption toggled", extra={"event": "note_encrypt_toggle", "extra_data": {"note_id": note_id, "encrypted": want_encrypted}})
+    return jsonify({"ok": True, "encrypted": want_encrypted, "meta": meta})
+
+
 @app.get("/api/notes/<note_id>/pdf")
 def api_note_pdf(note_id: str):
     """
@@ -1191,7 +1545,7 @@ def api_note_pdf(note_id: str):
 
     content = ""
     if content_path and content_path.exists():
-        content = content_path.read_text(encoding="utf-8", errors="ignore")
+        content = read_note_content(content_path, meta)
 
     fmt = (request.args.get("format") or "md").strip().lower()
     if fmt not in ("md", "txt"):
@@ -1254,8 +1608,10 @@ def api_note_pdf(note_id: str):
         doc.build(flow, canvasmaker=canvas_maker)
         buf.seek(0)
     except Exception as e:
+        log.warning("PDF generation failed", extra={"event": "pdf_failed", "extra_data": {"note_id": note_id, "error": str(e)}})
         return jsonify({"error": "pdf_failed", "detail": str(e)}), 500
 
+    log.info("PDF generated", extra={"event": "pdf_generated", "extra_data": {"note_id": note_id, "title": display}})
     return send_file(
         buf,
         mimetype="application/pdf",

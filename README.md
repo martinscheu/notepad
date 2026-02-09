@@ -32,7 +32,7 @@ Simple self-hosted sticky notes / scratchpad web app.
 | Ctrl+N | New note |
 | Ctrl+K | Search / find in note |
 | Ctrl+H | Search & Replace |
-| Ctrl+Shift+R | Rename & Metadata |
+| Ctrl+Shift+R | Rename |
 | Ctrl+X | Close current tab |
 | Esc | Clear search / close dialogs |
 

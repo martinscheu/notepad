@@ -306,6 +306,72 @@ body{
   border-color: #da1e28;
 }
 
+.encrypted-badge{
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  line-height: 1.2;
+}
+.encrypted-badge.hidden{
+  display: none;
+}
+.form-row.hidden,
+.modal-body > .hidden,
+.settings-section-body .hidden{
+  display: none;
+}
+
+/* Collapsible settings sections */
+.settings-section{
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.settings-section-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--surface-2);
+}
+.settings-section-header:hover{
+  background: color-mix(in srgb, var(--surface-2), var(--accent) 4%);
+}
+.settings-section-caret{
+  font-size: 11px;
+  opacity: 0.5;
+  transition: transform 0.15s;
+}
+.settings-section.collapsed .settings-section-caret{
+  transform: rotate(-90deg);
+}
+.settings-section-body{
+  display: grid;
+  gap: 14px;
+  padding: 16px 14px;
+}
+.settings-section.collapsed .settings-section-body{
+  display: none;
+}
+
+/* Button row inside settings (replaces inline flex) */
+.settings-btn-row{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+.settings-btn-row .btn{
+  height: 36px;
+}
+
 .actions{
   display: flex;
   gap: 8px;
@@ -810,20 +876,85 @@ body{
 
 
 
-/* Note actions in top bar (next to New) */
+/* Note actions in top bar (ghost style – light & minimal) */
 .note-actions-top{
   display: inline-flex;
   align-items: center;
-  gap: 14px;
-  margin-left: 10px;
+  gap: 10px;
+  margin-left: 6px;
 }
 .note-actions-top .btn{
-  padding: 8px 12px;
+  padding: 4px 8px;
+  font-size: 13px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.note-actions-top .btn:hover{
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+.note-actions-top .select{
+  font-size: 13px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  height: 28px;
+  padding: 0 6px;
+}
+.note-actions-top .select:hover{
+  border-color: var(--border);
+  background: var(--surface);
 }
 .note-actions-top .action-group{
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+}
+.note-actions-top .action-group + .action-group{
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+
+/* Dropdown menu (used for Download) */
+.dropdown{
+  position: relative;
+  display: inline-flex;
+}
+.dropdown-menu{
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 140px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  z-index: 20;
+  padding: 4px;
+  display: grid;
+  gap: 2px;
+}
+.dropdown-menu.hidden{ display: none; }
+.dropdown-item{
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  text-align: left;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.dropdown-item:hover{
+  background: var(--surface-2);
+}
+html[data-theme="dark"] .dropdown-menu{
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
 }
 
 /* Distraction-free mode: when file view off, hide tabs row too */
@@ -912,12 +1043,7 @@ body.dark .btn-ghost:hover { background: rgba(255,255,255,0.06); }
 }
 
 
-/* Sidebar meta: Tab sorting should match Notes / Saved typography */
-#tabSortingInfo {
-  font-size: 13px;
-  line-height: 1.4;
-  opacity: 0.8;
-}
+/* (tabSortingInfo removed – moved to Settings modal) */
 
 
 /* Normalize accent color to green */
@@ -968,7 +1094,7 @@ body.dark .modal-header { border-color: rgba(255,255,255,0.10); }
 .settings-divider{
   height: 1px;
   background: var(--border, rgba(0,0,0,0.10));
-  margin: 4px 0;
+  margin: 6px 0;
 }
 .form-row { display: grid; gap: 6px; }
 .form-row label { font-size: 13px; opacity: 0.85; }

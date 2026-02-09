@@ -77,10 +77,11 @@ function renderTabsSafe(){
   const elPreviewFormat = $("previewFormat");
   const elTocToggle = $("tocToggle");
   const elPdf = $("pdfNote");
-  const elRename = $("renameNote");  const elDownload = $("downloadNote");  const elTheme = $("themeToggle");
+  const elRename = $("renameNote");  const elDownload = $("downloadNote");
   const elCopyLink = $("copyLink");
   const elPin = $("pinNote");
-  const elMru = $("mruToggle");
+  const elDownloadBtn = $("downloadBtn");
+  const elMoreBtn = $("moreBtn");
   const elFileView = $("fileViewToggle");
   
   const elPreview = $("preview");
@@ -123,8 +124,9 @@ let deleteInProgress = false;
 
   function setMruMode(mode){
     mruMode = (mode === "mru") ? "mru" : "fixed";
-    elMru.textContent = (mruMode === "mru") ? "Tab sort: Classic" : "Tab sort: MRU";
     localStorage.setItem("sn_mru", mruMode);
+    const ss = document.getElementById("settingsTabSort");
+    if(ss) ss.value = mruMode;
     updateTabSortingInfo();
   }
 
@@ -146,8 +148,9 @@ let deleteInProgress = false;
   function setTheme(t){
     theme = t;
     document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light");
-    elTheme.textContent = (t === "dark") ? "Light" : "Dark";
     localStorage.setItem("sn_theme", t);
+    const st = document.getElementById("settingsTheme");
+    if(st) st.value = t;
   }
 
   function setTocOpen(on){
@@ -474,6 +477,14 @@ let deleteInProgress = false;
     };
   }
 
+  function getDocDefaults(){
+    try{
+      const raw = localStorage.getItem("sn_doc_defaults");
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return { author: "", company: "", tlp: "AMBER" };
+  }
+
   function applyPdfUseExportDateState(){
     const useExport = $("pdfUseExportDate");
     const dateInput = $("pdfDate");
@@ -483,6 +494,7 @@ let deleteInProgress = false;
   }
 
   function setPdfFields(pdf){
+    const defaults = getDocDefaults();
     const p = Object.assign(getDefaultPdfMeta(), (pdf || {}));
     const author = $("pdfAuthor");
     const company = $("pdfCompany");
@@ -490,12 +502,12 @@ let deleteInProgress = false;
     const date = $("pdfDate");
     const useExport = $("pdfUseExportDate");
     const tlp = $("pdfTlp");
-    if(author) author.value = p.author || "";
-    if(company) company.value = p.company || "";
+    if(author) author.value = p.author || defaults.author || "";
+    if(company) company.value = p.company || defaults.company || "";
     if(version) version.value = p.version || "";
     if(date) date.value = p.date || "";
     if(useExport) useExport.checked = !!p.use_export_date;
-    if(tlp) tlp.value = (p.tlp || "AMBER").toUpperCase();
+    if(tlp) tlp.value = (p.tlp || defaults.tlp || "AMBER").toUpperCase();
     applyPdfUseExportDateState();
   }
 
@@ -544,6 +556,8 @@ let deleteInProgress = false;
       const subjects = [...new Set(notes.map(n => (n.subject || "").trim()).filter(Boolean))].sort();
       dl.innerHTML = subjects.map(s => `<option value="${s.replace(/"/g,'&quot;')}">`).join("");
     }
+    const encCheckbox = document.getElementById("noteEncrypted");
+    if(encCheckbox) encCheckbox.checked = !!(t.meta && t.meta.encrypted);
     setPdfFields((t.meta && t.meta.pdf) || null);
     loadPdfSettingsForActiveNote();
   }
@@ -577,9 +591,37 @@ let deleteInProgress = false;
         if(pdfRes && pdfRes.pdf){
           meta.pdf = pdfRes.pdf;
         }
+        // Update encrypted from pdfRes meta if TLP:RED auto-encrypted
+        if(pdfRes && pdfRes.meta && pdfRes.meta.encrypted !== undefined){
+          meta.encrypted = pdfRes.meta.encrypted;
+        }
       }catch(e){
         console.error(e);
       }
+
+      // Handle encryption toggle
+      const encCheckbox = document.getElementById("noteEncrypted");
+      if(encCheckbox){
+        const wantEncrypted = encCheckbox.checked;
+        const isEncrypted = !!(meta.encrypted);
+        if(wantEncrypted !== isEncrypted){
+          try{
+            const encRes = await apiPut(
+              `/api/notes/${encodeURIComponent(t.noteId)}/encrypt`,
+              {encrypted: wantEncrypted}
+            );
+            if(encRes && encRes.meta){
+              Object.assign(meta, encRes.meta);
+            } else if(encRes && encRes.encrypted !== undefined){
+              meta.encrypted = encRes.encrypted;
+            }
+          }catch(e){
+            console.error("Encryption toggle failed:", e);
+            alert("Encryption toggle failed. " + (e.message || "Check that a passphrase is configured in Settings."));
+          }
+        }
+      }
+
       t.meta = meta;
       t.rev = meta.rev || t.rev;
     setFileName(meta);
@@ -667,10 +709,7 @@ function fmtTime(iso){
   }
 
   function updateTabSortingInfo(){
-    const el = document.getElementById("tabSortingInfo");
-    if(!el) return;
-    const label = (mruMode === "mru") ? "MRU" : "Classic";
-    el.textContent = `Tab sorting: ${label}`;
+    // Settings modal dropdown is updated via setMruMode
   }
 
 
@@ -1033,9 +1072,10 @@ function fmtTime(iso){
 
 function enableActions(enabled){
     elPreviewToggle.disabled = !enabled;
-    elPdf.disabled = !enabled;
+    if(elPdf) elPdf.disabled = !enabled;
     if(elRename){ elRename.disabled = !enabled; }
-    elDownload.disabled = !enabled;
+    if(elDownload) elDownload.disabled = !enabled;
+    if(elDownloadBtn) elDownloadBtn.disabled = !enabled;
   }
 
   async function apiGet(url){
@@ -1134,10 +1174,21 @@ function enableActions(enabled){
     return header;
   }
 
+  function setEncryptedBadge(meta){
+    const badge = document.getElementById("encryptedBadge");
+    if(!badge) return;
+    if(meta && meta.encrypted){
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+  }
+
   function setFileName(meta){
     if(!elFileName) return;
     elFileName.textContent = displayFilenameWithPin(meta);
     setTlpBadge(meta);
+    setEncryptedBadge(meta);
   }
 
   function setTlpBadge(meta){
@@ -1253,9 +1304,6 @@ function renderNotesList(){
   if(typeof elSortModeLabel !== "undefined" && elSortModeLabel){
     elSortModeLabel.textContent = current;
   }
-  // footer label
-  const ft = document.getElementById("footerTabSorting");
-  if(ft) ft.textContent = current;
 }
 
 function renderTabs(){
@@ -1507,22 +1555,7 @@ async function renameNote(){
     setStatus("Deleting...");
     try{
       await apiDelete(`/api/notes/${encodeURIComponent(t.noteId)}`);
-      const idx = tabs.findIndex(x => x.tabId === t.tabId);
-      if(idx >= 0) tabs.splice(idx, 1);
-      activeTabId = tabs.length ? tabs[tabs.length - 1].tabId : null;
-
-      if(activeTabId){
-        activateTab(activeTabId);
-  }else{
-        elEditor.value = "";
-        setFileName(null);
-        enableActions(false);
-        elEditor.value = "";
-        elEditor.disabled = true;
-        setSaveState("Idle", "");
-        renderTabs();
-      }
-    closeTabsForNotes([id]);
+      closeTabsForNotes([t.noteId]);
 
       await loadNotes();
       setStatus("Idle");
@@ -1682,17 +1715,44 @@ async function renameNote(){
   if(elSelectNone) elSelectNone.addEventListener("click", selectNone);
   if(elDownloadSelected) elDownloadSelected.addEventListener("click", downloadSelected);
   if(elDeleteSelected) elDeleteSelected.addEventListener("click", deleteSelected);
-  if(elRename){ elRename.addEventListener("click", renameNote); }  elDownload.addEventListener("click", downloadNote);  elPreviewToggle.addEventListener("click", () => setPreviewMode(!previewMode));
-  if(elCopyLink){ elCopyLink.addEventListener("click", copyNoteLink); }
+  if(elRename){ elRename.addEventListener("click", renameNote); }
+  elPreviewToggle.addEventListener("click", () => setPreviewMode(!previewMode));
   if(elPin){ elPin.addEventListener("click", togglePin); }
-  if(elTocToggle){ elTocToggle.addEventListener("click", () => setTocOpen(tocOpen !== "on")); }
+  if(elTocToggle){ elTocToggle.addEventListener("click", () => { closeDropdowns(); setTocOpen(tocOpen !== "on"); }); }
   if(elTocDepth){ elTocDepth.addEventListener("change", updateToc); }
-  elPdf.addEventListener("click", downloadPdf);
-  elTheme.addEventListener("click", () => setTheme(theme === "dark" ? "light" : "dark"));
-  elMru.addEventListener("click", () => setMruMode(mruMode === "mru" ? "fixed" : "mru"));
+
+  // Download dropdown
+  if(elDownloadBtn){
+    elDownloadBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const menu = document.querySelector("#downloadDropdown .dropdown-menu");
+      const willOpen = menu && menu.classList.contains("hidden");
+      document.querySelectorAll(".dropdown-menu").forEach(m => m.classList.add("hidden"));
+      if(willOpen) menu.classList.remove("hidden");
+    });
+  }
+  // More dropdown
+  if(elMoreBtn){
+    elMoreBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const menu = document.querySelector("#moreDropdown .dropdown-menu");
+      const willOpen = menu && menu.classList.contains("hidden");
+      document.querySelectorAll(".dropdown-menu").forEach(m => m.classList.add("hidden"));
+      if(willOpen) menu.classList.remove("hidden");
+    });
+  }
+  if(elDownload){ elDownload.addEventListener("click", () => { closeDropdowns(); downloadNote(); }); }
+  if(elPdf){ elPdf.addEventListener("click", () => { closeDropdowns(); downloadPdf(); }); }
+  if(elCopyLink){ elCopyLink.addEventListener("click", () => { closeDropdowns(); copyNoteLink(); }); }
+  document.addEventListener("click", closeDropdowns);
+  function closeDropdowns(){
+    document.querySelectorAll(".dropdown-menu").forEach(m => m.classList.add("hidden"));
+  }
   elFileView.addEventListener("click", () => setFileViewMode(fileView === "on" ? "off" : "on"));
   const elReplaceBtn = $("replaceBtn");
   if(elReplaceBtn) elReplaceBtn.addEventListener("click", openReplaceModal);
+  const elMetadataBtn = $("metadataBtn");
+  if(elMetadataBtn) elMetadataBtn.addEventListener("click", renameNote);
   if(elPreviewFormat){
     elPreviewFormat.addEventListener("change", () => setPreviewFormat(elPreviewFormat.value));
   }
@@ -1976,17 +2036,17 @@ init();
 
 
 /* Sync (WebDAV) settings UI */
-function $(id){ return document.getElementById(id); }
+function _$(id){ return document.getElementById(id); }
 
 function openSyncModal(){
-  const m = $("syncModal");
+  const m = _$("syncModal");
   if(!m) return;
   m.classList.remove("hidden");
   m.setAttribute("aria-hidden","false");
 }
 
 function closeSyncModal(){
-  const m = $("syncModal");
+  const m = _$("syncModal");
   if(!m) return;
   m.classList.add("hidden");
   m.setAttribute("aria-hidden","true");
@@ -2016,18 +2076,145 @@ function closeSyncModal(){
   renderTabsSafe();
 }
 
+/* Encryption settings UI */
+async function loadEncryptionSettings(){
+  try{
+    const r = await fetch("/api/encryption/settings");
+    const j = await r.json();
+    const setupDiv = _$("encryptionSetup");
+    const activeDiv = _$("encryptionActive");
+    const statusEl = _$("encryptionStatus");
+    const warn = _$("encryptionWarning");
+    if(warn) warn.textContent = "";
+    if(j.has_key){
+      if(setupDiv) setupDiv.classList.add("hidden");
+      if(activeDiv) activeDiv.classList.remove("hidden");
+      const countText = j.encrypted_count ? ` (${j.encrypted_count} note${j.encrypted_count === 1 ? "" : "s"} encrypted)` : "";
+      if(statusEl) statusEl.textContent = "Encryption enabled" + countText;
+      // Clear all inputs
+      const f = ["encryptionCurrentPassphrase","encryptionPassphrase","encryptionDisablePassphrase","encryptionNewPassphrase"];
+      f.forEach(id => { const e = _$(id); if(e) e.value = ""; });
+    } else {
+      if(setupDiv) setupDiv.classList.remove("hidden");
+      if(activeDiv) activeDiv.classList.add("hidden");
+      const np = _$("encryptionNewPassphrase");
+      if(np) np.value = "";
+    }
+  }catch(e){
+    const el = _$("encryptionStatus");
+    if(el) el.textContent = "Status: unavailable";
+  }
+}
+
+async function enableEncryption(){
+  const input = _$("encryptionNewPassphrase");
+  const passphrase = (input ? input.value : "").trim();
+  const warn = _$("encryptionWarning");
+  if(warn) warn.textContent = "";
+  if(!passphrase){
+    if(warn) warn.textContent = "Passphrase cannot be empty";
+    return;
+  }
+  try{
+    const r = await fetch("/api/encryption/settings", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({passphrase})
+    });
+    const j = await r.json();
+    if(j.ok){
+      await loadEncryptionSettings();
+    } else {
+      if(warn) warn.textContent = j.error || "Error enabling encryption";
+    }
+  }catch(e){
+    if(warn) warn.textContent = "Error enabling encryption";
+  }
+}
+
+async function changeEncryptionPassphrase(){
+  const currentInput = _$("encryptionCurrentPassphrase");
+  const newInput = _$("encryptionPassphrase");
+  const warn = _$("encryptionWarning");
+  if(warn) warn.textContent = "";
+  const current = (currentInput ? currentInput.value : "").trim();
+  const newPass = (newInput ? newInput.value : "").trim();
+  if(!current){
+    if(warn) warn.textContent = "Enter your current passphrase";
+    return;
+  }
+  if(!newPass){
+    if(warn) warn.textContent = "Enter a new passphrase";
+    return;
+  }
+  try{
+    const r = await fetch("/api/encryption/settings", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({passphrase: newPass, current_passphrase: current})
+    });
+    const j = await r.json();
+    if(j.ok){
+      await loadEncryptionSettings();
+      if(warn && j.warning === "key_changed"){
+        warn.textContent = "Passphrase changed. Notes encrypted with the old passphrase will need to be re-encrypted.";
+      }
+    } else {
+      if(warn) warn.textContent = j.error || "Error changing passphrase";
+    }
+  }catch(e){
+    if(warn) warn.textContent = "Error changing passphrase";
+  }
+}
+
+async function disableEncryption(){
+  const input = _$("encryptionDisablePassphrase");
+  const warn = _$("encryptionWarning");
+  if(warn) warn.textContent = "";
+  const passphrase = (input ? input.value : "").trim();
+  if(!passphrase){
+    if(warn) warn.textContent = "Enter your passphrase to confirm";
+    return;
+  }
+  if(!confirm("Disable encryption? All encrypted notes will be decrypted and stored as plaintext.")){
+    return;
+  }
+  try{
+    const r = await fetch("/api/encryption/settings", {
+      method: "DELETE",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({current_passphrase: passphrase})
+    });
+    const j = await r.json();
+    if(j.ok){
+      const msg = j.decrypted ? `Encryption disabled. ${j.decrypted} note(s) decrypted.` : "Encryption disabled.";
+      await loadEncryptionSettings();
+      if(warn){
+        warn.style.color = "";
+        warn.textContent = j.warning ? (msg + " " + j.warning) : msg;
+        // Reset color after a moment
+        setTimeout(() => { if(warn) warn.style.color = ""; }, 0);
+      }
+    } else {
+      if(warn) warn.textContent = j.error || "Error disabling encryption";
+    }
+  }catch(e){
+    if(warn) warn.textContent = "Error disabling encryption";
+  }
+}
+
 async function loadSyncSettings(){
   try{
     const r = await fetch("/api/sync/settings");
     const j = await r.json();
-    $("syncEnabled").checked = !!j.enabled;
-    $("syncUrl").value = j.webdav_url || "";
-    $("syncRemotePath").value = j.remote_path || "";
-    $("syncUser").value = j.username || "";
-    $("syncPass").value = j.password || "";
-    $("syncMode").value = j.mode || "push";
-    $("syncInterval").value = (j.interval_s || 60);
-    $("syncNoDelete").checked = (j.no_deletes !== false);
+    _$("syncEnabled").checked = !!j.enabled;
+    _$("syncUrl").value = j.webdav_url || "";
+    _$("syncRemotePath").value = j.remote_path || "";
+    _$("syncUser").value = j.username || "";
+    _$("syncPass").value = j.password || "";
+    _$("syncMode").value = j.mode || "push";
+    _$("syncInterval").value = (j.interval_s || 60);
+    _$("syncNoDelete").checked = (j.no_deletes !== false);
   }catch(e){}
 }
 
@@ -2038,23 +2225,23 @@ async function loadSyncStatus(){
     const t = j.last_time || "never";
     const res = j.last_result || "idle";
     const err = j.last_error ? (" - " + j.last_error) : "";
-    $("syncStatus").textContent = `Status: ${res} (last: ${t})${err}`;
+    _$("syncStatus").textContent = `Status: ${res} (last: ${t})${err}`;
   }catch(e){
-    const el = $("syncStatus");
+    const el = _$("syncStatus");
     if(el) el.textContent = "Status: unavailable";
   }
 }
 
 async function saveSyncSettings(){
   const payload = {
-    enabled: $("syncEnabled").checked,
-    webdav_url: $("syncUrl").value.trim(),
-    remote_path: $("syncRemotePath").value.trim(),
-    username: $("syncUser").value.trim(),
-    password: $("syncPass").value,
-    mode: $("syncMode").value,
-    interval_s: parseInt($("syncInterval").value || "60", 10),
-    no_deletes: $("syncNoDelete").checked
+    enabled: _$("syncEnabled").checked,
+    webdav_url: _$("syncUrl").value.trim(),
+    remote_path: _$("syncRemotePath").value.trim(),
+    username: _$("syncUser").value.trim(),
+    password: _$("syncPass").value,
+    mode: _$("syncMode").value,
+    interval_s: parseInt(_$("syncInterval").value || "60", 10),
+    no_deletes: _$("syncNoDelete").checked
   };
   const r = await fetch("/api/sync/settings", {
     method: "POST",
@@ -2062,17 +2249,17 @@ async function saveSyncSettings(){
     body: JSON.stringify(payload)
   });
   const j = await r.json();
-  $("syncStatus").textContent = j.ok ? "Status: saved" : ("Status: error - " + (j.error||""));
+  _$("syncStatus").textContent = j.ok ? "Status: saved" : ("Status: error - " + (j.error||""));
   await loadSyncStatus();
   await updateTopSyncStatus();
 }
 
 async function testSync(){
   const payload = {
-    webdav_url: $("syncUrl").value.trim(),
-    remote_path: $("syncRemotePath").value.trim(),
-    username: $("syncUser").value.trim(),
-    password: $("syncPass").value
+    webdav_url: _$("syncUrl").value.trim(),
+    remote_path: _$("syncRemotePath").value.trim(),
+    username: _$("syncUser").value.trim(),
+    password: _$("syncPass").value
   };
   const r = await fetch("/api/sync/test", {
     method:"POST",
@@ -2080,7 +2267,7 @@ async function testSync(){
     body: JSON.stringify(payload)
   });
   const j = await r.json();
-  $("syncStatus").textContent = j.ok ? "Status: connection OK" : ("Status: connection failed - " + (j.error||""));
+  _$("syncStatus").textContent = j.ok ? "Status: connection OK" : ("Status: connection failed - " + (j.error||""));
   await loadSyncStatus();
   await updateTopSyncStatus();
 }
@@ -2091,7 +2278,7 @@ async function runSyncNow(){
 
   const r = await fetch("/api/sync/run", {method:"POST"});
   const j = await r.json();
-  $("syncStatus").textContent = j.ok ? "Status: sync requested" : ("Status: error - " + (j.error||""));
+  _$("syncStatus").textContent = j.ok ? "Status: sync requested" : ("Status: error - " + (j.error||""));
   await loadSyncStatus();
   await updateTopSyncStatus();
   setTimeout(loadSyncStatus, 1200);
@@ -2099,39 +2286,6 @@ async function runSyncNow(){
   setTimeout(loadSyncStatus, 3500);
   setTimeout(updateTopSyncStatus, 3500);
 }
-
-document.addEventListener("DOMContentLoaded", ()=>{
-  if(typeof window !== "undefined" && typeof window.bindReplaceModal === "function"){
-    window.bindReplaceModal();
-  }
-  if(typeof window !== "undefined" && typeof window.bindRenameModal === "function"){
-    window.bindRenameModal();
-  }
-  elSortModeLabel = document.getElementById("tabSortingInfo");
-  elRename = document.getElementById("renameNote");
-  const b = $("syncBtn");
-  if(b){
-    b.addEventListener("click", async ()=>{
-      openSyncModal();
-      await loadSyncSettings();
-      await loadSyncStatus();
-      await updateTopSyncStatus();
-    });
-  }
-  const c = $("syncCloseBtn");
-  if(c) c.addEventListener("click", closeSyncModal);
-  const m = $("syncModal");
-  if(m){
-    m.addEventListener("click", (ev)=>{
-      const t = ev.target;
-      if(t && t.getAttribute && t.getAttribute("data-close")==="sync") closeSyncModal();
-    });
-  }
-  const s = $("syncSaveBtn"); if(s) s.addEventListener("click", saveSyncSettings);
-  const t = $("syncTestBtn"); if(t) t.addEventListener("click", testSync);
-  const r = $("syncRunBtn"); if(r) r.addEventListener("click", runSyncNow);
-});
-
 
 function handleDeletedNotes(ids){
   if(!Array.isArray(ids)) ids = [ids];
@@ -2195,12 +2349,6 @@ async function updateTopSyncStatus(){
   }
 }
 
-document.addEventListener("DOMContentLoaded", ()=>{
-  updateTopSyncStatus();
-  setInterval(updateTopSyncStatus, 5000);
-});
-
-
 async function togglePauseSync(){
   const btn = document.getElementById("pauseSyncBtn");
   if(!btn) return;
@@ -2249,8 +2397,107 @@ document.addEventListener("keydown", (e)=>{
 
 
 document.addEventListener("DOMContentLoaded", ()=>{
+  // Modal bindings
+  if(typeof window !== "undefined" && typeof window.bindReplaceModal === "function"){
+    window.bindReplaceModal();
+  }
+  if(typeof window !== "undefined" && typeof window.bindRenameModal === "function"){
+    window.bindRenameModal();
+  }
+  elRename = document.getElementById("renameNote");
+
+  // Sync UI
+  // Encryption UI bindings
+  const encEnableBtn = _$("encryptionEnableBtn");
+  if(encEnableBtn) encEnableBtn.addEventListener("click", enableEncryption);
+  const encSaveBtn = _$("encryptionSaveBtn");
+  if(encSaveBtn) encSaveBtn.addEventListener("click", changeEncryptionPassphrase);
+  const encDisableBtn = _$("encryptionDisableBtn");
+  if(encDisableBtn) encDisableBtn.addEventListener("click", disableEncryption);
+
+  // Preferences bindings (theme + tab sort in Settings modal)
+  const settingsTheme = document.getElementById("settingsTheme");
+  if(settingsTheme){
+    settingsTheme.value = localStorage.getItem("sn_theme") || "light";
+    settingsTheme.addEventListener("change", () => setTheme(settingsTheme.value));
+  }
+  const settingsTabSort = document.getElementById("settingsTabSort");
+  if(settingsTabSort){
+    settingsTabSort.value = localStorage.getItem("sn_mru") || "fixed";
+    settingsTabSort.addEventListener("change", () => setMruMode(settingsTabSort.value));
+  }
+
+  const b = _$("syncBtn");
+  if(b){
+    b.addEventListener("click", async ()=>{
+      // Sync preferences dropdowns with current state
+      const st = document.getElementById("settingsTheme");
+      if(st) st.value = localStorage.getItem("sn_theme") || "light";
+      const ss = document.getElementById("settingsTabSort");
+      if(ss) ss.value = localStorage.getItem("sn_mru") || "fixed";
+      // Load document defaults into form
+      try{
+        const dd = JSON.parse(localStorage.getItem("sn_doc_defaults") || "{}");
+        const da = document.getElementById("defaultAuthor");
+        const dc = document.getElementById("defaultCompany");
+        const dt = document.getElementById("defaultTlp");
+        if(da) da.value = dd.author || "";
+        if(dc) dc.value = dd.company || "";
+        if(dt) dt.value = (dd.tlp || "AMBER").toUpperCase();
+      }catch(e){}
+      openSyncModal();
+      await loadSyncSettings();
+      await loadSyncStatus();
+      await loadEncryptionSettings();
+      await updateTopSyncStatus();
+    });
+  }
+  const c = _$("syncCloseBtn");
+  if(c) c.addEventListener("click", closeSyncModal);
+  const c2 = _$("syncCloseBtn2");
+  if(c2) c2.addEventListener("click", closeSyncModal);
+  const m = _$("syncModal");
+  if(m){
+    m.addEventListener("click", (ev)=>{
+      const t = ev.target;
+      if(t && t.getAttribute && t.getAttribute("data-close")==="sync") closeSyncModal();
+    });
+  }
+  const s = _$("syncSaveBtn"); if(s) s.addEventListener("click", saveSyncSettings);
+  const t = _$("syncTestBtn"); if(t) t.addEventListener("click", testSync);
+  const r = _$("syncRunBtn"); if(r) r.addEventListener("click", runSyncNow);
+
+  // Pause sync button
   const p = document.getElementById("pauseSyncBtn");
   if(p) p.addEventListener("click", togglePauseSync);
+
+  // Document Defaults
+  const saveDefaultsBtn = document.getElementById("saveDefaultsBtn");
+  if(saveDefaultsBtn){
+    saveDefaultsBtn.addEventListener("click", () => {
+      const defaults = {
+        author: (document.getElementById("defaultAuthor")?.value || "").trim(),
+        company: (document.getElementById("defaultCompany")?.value || "").trim(),
+        tlp: (document.getElementById("defaultTlp")?.value || "AMBER").toUpperCase(),
+      };
+      localStorage.setItem("sn_doc_defaults", JSON.stringify(defaults));
+      saveDefaultsBtn.textContent = "Saved";
+      setTimeout(() => { saveDefaultsBtn.textContent = "Save defaults"; }, 1200);
+    });
+  }
+
+  // Collapsible settings sections
+  document.querySelectorAll(".settings-section-header[data-toggle]").forEach(header => {
+    header.addEventListener("click", () => {
+      const sectionId = header.getAttribute("data-toggle");
+      const section = document.getElementById(sectionId);
+      if(section) section.classList.toggle("collapsed");
+    });
+  });
+
+  // Top sync status polling
+  updateTopSyncStatus();
+  setInterval(updateTopSyncStatus, 5000);
 });
 
 

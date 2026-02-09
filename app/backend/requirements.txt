@@ -2,3 +2,4 @@ flask
 reportlab
 pyyaml
 markdown
+cryptography

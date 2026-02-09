@@ -18,7 +18,19 @@ services:
 
     volumes:
       - ${DATA_DIR_HOST:-/opt/stickynotes/notes}:/data
-      - /opt/stickynotes/config:/config:ro
+      - /opt/stickynotes/config:/config
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "stickynotes"
+      # To use syslog instead, replace the above logging block with:
+      # driver: "syslog"
+      # options:
+      #   syslog-address: "udp://localhost:514"
+      #   tag: "stickynotes"
 
 
   rclone-sync:
@@ -29,5 +41,12 @@ services:
       - ${DATA_DIR_HOST:-/opt/stickynotes/notes}:/data
       - ./rclone:/scripts:ro
     entrypoint: ["/bin/sh","/scripts/entrypoint.sh"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+        tag: "stickynotes-rclone"
+
     depends_on:
       - stickynotes
