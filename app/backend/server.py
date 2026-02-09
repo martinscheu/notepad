@@ -35,6 +35,24 @@ FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 
 
 
+_CITE_START = "\ue200"
+_CITE_END = "\ue201"
+_CITE_SEP = "\ue202"
+_CITE_RE = re.compile(re.escape(_CITE_START) + "cite" + re.escape(_CITE_SEP) + r"(.+?)" + re.escape(_CITE_END))
+
+
+def _normalize_citations(text: str) -> str:
+    if not text:
+        return text
+    def repl(match: re.Match) -> str:
+        inner = match.group(1) or ""
+        parts = [p for p in inner.split(_CITE_SEP) if p]
+        if not parts:
+            return "[cite]"
+        return "[cite: " + ", ".join(parts) + "]"
+    out = _CITE_RE.sub(repl, text)
+    return out.replace(_CITE_START, "").replace(_CITE_SEP, "").replace(_CITE_END, "")
+
 
 def _pdf_wrap_lines(text: str, c, max_width: float, font_name: str, font_size: int):
     # Basic word-wrap; preserves existing newlines
@@ -149,12 +167,33 @@ class _MdBlockParser(HTMLParser):
 
 
 def _markdown_to_flowables(md_text: str) -> List[Any]:
+    def normalize_lists(text: str) -> str:
+        if not text:
+            return text
+        lines = text.replace("\r\n", "\n").split("\n")
+        out: List[str] = []
+        in_code = False
+        list_re = re.compile(r"^\s*(?:[-*]|\d+\.)\s+")
+        for line in lines:
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                out.append(line)
+                continue
+            if not in_code and list_re.match(line):
+                if out:
+                    prev = out[-1]
+                    if prev.strip() and not list_re.match(prev):
+                        out.append("")
+            out.append(line)
+        return "\n".join(out)
+
     if mdlib is None:
         styles = getSampleStyleSheet()
         code_style = styles["Code"]
         max_width = A4[0] - (18 * mm * 2)
         wrapped = "\n".join(_pdf_wrap_lines(md_text or "", None, max_width, code_style.fontName, code_style.fontSize))
         return [Preformatted(wrapped, code_style)]
+    md_text = normalize_lists(md_text or "")
     html = mdlib.markdown(md_text or "", extensions=["fenced_code", "tables"])
     parser = _MdBlockParser()
     parser.feed(html)
@@ -698,7 +737,7 @@ def api_import_notes():
 
         try:
             raw = f.read()
-            text = raw.decode("utf-8", errors="replace")
+            text = _normalize_citations(raw.decode("utf-8", errors="replace"))
         except Exception:
             errors.append({"file": safe_name, "error": "Failed to read file"})
             continue
@@ -759,7 +798,7 @@ def api_get_note(note_id: str):
 def api_save_content(note_id: str):
     ensure_dirs()
     body = request.get_json(force=True)
-    content = body.get("content", "")
+    content = _normalize_citations(body.get("content", ""))
     base_rev = int(body.get("base_rev", 0))
 
     content_path, meta_path, deleted = find_note_files_by_id(note_id)
