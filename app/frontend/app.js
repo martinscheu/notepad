@@ -535,20 +535,36 @@ let deleteInProgress = false;
     }
   }
 
-  function openRenameModal(){
+  function openRenameModal(mode){
     const modal = document.getElementById("rename-modal");
     if(!modal) return;
     const t = getActiveTab();
     if(!t) return;
     const input = document.getElementById("rename-input");
     const subjectInput = document.getElementById("subject-input");
+    const renameSection = document.getElementById("rename-section");
+    const metadataSection = document.getElementById("metadata-section");
+    const titleEl = document.getElementById("rename-title");
+    if(mode === "metadata"){
+      if(renameSection) renameSection.style.display = "none";
+      if(metadataSection) metadataSection.style.display = "";
+      if(titleEl) titleEl.textContent = "Document metadata";
+    } else if(mode === "rename"){
+      if(renameSection) renameSection.style.display = "";
+      if(metadataSection) metadataSection.style.display = "none";
+      if(titleEl) titleEl.textContent = "Rename note";
+    } else {
+      if(renameSection) renameSection.style.display = "";
+      if(metadataSection) metadataSection.style.display = "";
+      if(titleEl) titleEl.textContent = "Rename note";
+    }
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden","false");
-    if(input){
+    if(mode !== "metadata" && input){
       input.value = (t.meta && (t.meta.title || t.meta.display_title || t.meta.user_title || "")) || "";
       setTimeout(() => { input.focus(); input.select(); }, 0);
     }
-    if(subjectInput){
+    if(mode !== "metadata" && subjectInput){
       subjectInput.value = (t.meta && (t.meta.subject || "")) || "";
     }
     const dl = document.getElementById("subject-suggestions");
@@ -1516,7 +1532,7 @@ function renderTabs(){
 
 
 async function renameNote(){
-    openRenameModal();
+    openRenameModal("rename");
 }
 
   async function togglePin(){
@@ -1752,7 +1768,7 @@ async function renameNote(){
   const elReplaceBtn = $("replaceBtn");
   if(elReplaceBtn) elReplaceBtn.addEventListener("click", openReplaceModal);
   const elMetadataBtn = $("metadataBtn");
-  if(elMetadataBtn) elMetadataBtn.addEventListener("click", renameNote);
+  if(elMetadataBtn) elMetadataBtn.addEventListener("click", () => openRenameModal("metadata"));
   if(elPreviewFormat){
     elPreviewFormat.addEventListener("change", () => setPreviewFormat(elPreviewFormat.value));
   }
@@ -2032,6 +2048,8 @@ async function init(){
 }
 
 init();
+window.setTheme = setTheme;
+window.setMruMode = setMruMode;
 })();
 
 
@@ -2396,14 +2414,8 @@ document.addEventListener("keydown", (e)=>{
 });
 
 
-document.addEventListener("DOMContentLoaded", ()=>{
-  // Modal bindings
-  if(typeof window !== "undefined" && typeof window.bindReplaceModal === "function"){
-    window.bindReplaceModal();
-  }
-  if(typeof window !== "undefined" && typeof window.bindRenameModal === "function"){
-    window.bindRenameModal();
-  }
+{
+  // Modal & settings bindings (script is at end of body, DOM is ready)
   elRename = document.getElementById("renameNote");
 
   // Sync UI
@@ -2419,12 +2431,12 @@ document.addEventListener("DOMContentLoaded", ()=>{
   const settingsTheme = document.getElementById("settingsTheme");
   if(settingsTheme){
     settingsTheme.value = localStorage.getItem("sn_theme") || "light";
-    settingsTheme.addEventListener("change", () => setTheme(settingsTheme.value));
+    settingsTheme.addEventListener("change", () => window.setTheme(settingsTheme.value));
   }
   const settingsTabSort = document.getElementById("settingsTabSort");
   if(settingsTabSort){
     settingsTabSort.value = localStorage.getItem("sn_mru") || "fixed";
-    settingsTabSort.addEventListener("change", () => setMruMode(settingsTabSort.value));
+    settingsTabSort.addEventListener("change", () => window.setMruMode(settingsTabSort.value));
   }
 
   const b = _$("syncBtn");
@@ -2498,7 +2510,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
   // Top sync status polling
   updateTopSyncStatus();
   setInterval(updateTopSyncStatus, 5000);
-});
+}
 
 
 function sanitizeFilename(name){
