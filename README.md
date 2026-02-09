@@ -2,10 +2,39 @@
 
 Simple self-hosted sticky notes / scratchpad web app.
 
-- Single user
-- File-based storage (`/opt/stickynotes/notes`)
-- Autosave-first
+- Single user, no authentication
+- File-based storage (no database)
+- Autosave-first, keyboard-driven
 - LAN/VPN only
+- Dark / light theme (Nordic style)
+
+## Features
+
+- **Tabs** – open multiple notes, switch with click or keyboard
+- **Sidebar** – notes list grouped by subject, sortable, searchable
+- **Autosave** – saves on every keystroke (debounced), no save button
+- **Markdown preview** – toggle preview with format selection (Markdown, Text, JSON, YAML)
+- **Search** – full-text search across filenames and content (Ctrl+K)
+- **Search & Replace** – in-note find/replace with match highlighting
+- **Table of Contents** – TOC panel with selectable heading depth
+- **Subjects** – group notes by subject; autocomplete from existing subjects
+- **Pin** – pin important notes to the top
+- **PDF export** – Markdown-rendered PDF with metadata headers, TLP classification footer
+- **Import** – upload `.md` / `.txt` files as notes
+- **Export** – download individual notes or all notes as ZIP
+- **Deep links** – share links via `/?id=<note_id>`
+- **WebDAV sync** – sync notes to Nextcloud or any WebDAV server via rclone sidecar (push, pull, or two-way)
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+N | New note |
+| Ctrl+K | Search / find in note |
+| Ctrl+H | Search & Replace |
+| Ctrl+Shift+R | Rename & Metadata |
+| Ctrl+X | Close current tab |
+| Esc | Clear search / close dialogs |
 
 ## Host setup
 
@@ -17,21 +46,15 @@ sudo ./scripts/bootstrap.sh
 
 2) Create `/opt/stickynotes/config/compose.env` (optional; defaults are fine):
 
-```bash
-sudo nano /opt/stickynotes/config/compose.env
-```
-
-Example:
-
 ```env
 BIND_ADDR=0.0.0.0
 HOST_PORT=8060
 ```
 
-3) Deploy a release zip:
+3) Deploy:
 
 ```bash
-sudo ./scripts/deploy.sh /tmp/stickynotes-0.2.3.zip
+sudo ./scripts/deploy.sh <zip-or-directory> [version]
 ```
 
 Open:
@@ -39,15 +62,10 @@ Open:
 - UI: `http://<host-ip>:8060/`
 - Health: `http://<host-ip>:8060/health`
 
-
 ## Notes
-If scripts are not executable after unzip on your host:
+
+If scripts are not executable after unzip:
 
 ```bash
 chmod +x scripts/*.sh
 ```
-
-
-## UI options
-- Tabs order can be switched between fixed order and MRU (Most Recently Used) via the "Tabs" button.
-- Sidebar can be toggled on/off via the "Sidebar" button.

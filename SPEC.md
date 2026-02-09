@@ -1,4 +1,4 @@
-# Sticky Notes Web App – Specification (v0.2)
+# Sticky Notes Web App – Specification
 
 ## 1. Purpose
 
@@ -51,7 +51,8 @@ Target environment:
 ├── notes/
 │   ├── notes/
 │   ├── trash/
-│   └── exports/
+│   ├── exports/
+│   └── sync/          # WebDAV sync settings & status
 └── config/
     ├── config.json
     └── compose.env
@@ -103,10 +104,19 @@ Example:
   "created": "2026-01-06T21:14:33Z",
   "updated": "2026-01-06T21:17:02Z",
   "rev": 12,
-  "filename": "2026-01-06_21-14-33_ab12cd34.md",
+  "filename": "2026-01-06_21-14-33_ab12cd34_mytitle.md",
+  "title": "mytitle",
   "subject": "Research",
   "pinned": false,
-  "deleted": false
+  "deleted": false,
+  "pdf": {
+    "author": "John Doe",
+    "company": "Acme Corp",
+    "version": "1.0",
+    "date": "2026-01-06",
+    "use_export_date": true,
+    "tlp": "AMBER"
+  }
 }
 ```
 
@@ -114,6 +124,7 @@ Notes:
 - `rev` is an integer revision counter, incremented on every save
 - Unknown fields must be ignored (forward-compatible)
 - `subject` is an optional grouping label shown in the notes list
+- `pdf` contains per-note PDF export settings (author, company, version, date, TLP)
 
 ---
 
@@ -123,11 +134,11 @@ Notes:
 
 - Autosave on keystroke
 - Debounce delay: 500 ms – 1 s
-- No explicit “Save” button
+- No explicit "Save" button
 
 ### 6.2 Visual Feedback
 
-- Subtle “Saved” indicator
+- Subtle "Saved" indicator
 - Display:
   - Last saved timestamp
   - Saving-in-progress state
@@ -156,16 +167,13 @@ Notes:
 
 ## 7. User Interface
 
-### 7.1 Views
+### 7.1 Layout
 
-- Board view
-  - Notes displayed as cards
-  - Pinned notes appear first
-- List view
-  - Compact, sortable
-  - Optimised for search and scanning
-
-User can switch freely between views.
+- **Top bar** – brand, search, action buttons, theme toggle
+- **Sidebar** – notes list grouped by subject, sortable, with bulk actions
+- **Tabs bar** – open notes as tabs, save state indicator
+- **Editor** – plain textarea with optional preview
+- **Panels** – TOC (right side), Search & Replace (right side)
 
 ### 7.2 Sorting & Filtering
 
@@ -175,8 +183,15 @@ Sorting:
 - Filename
 
 Filtering:
+- Full-text search (filename + content)
 - Pinned / unpinned
-- Full-text search
+
+### 7.3 Subject Grouping
+
+- Notes grouped by subject in the sidebar
+- Collapsible groups
+- Subject field with autocomplete from existing subjects
+- Notes without a subject appear under "Unsorted"
 
 ---
 
@@ -187,7 +202,7 @@ Filtering:
   - Note content
 - Case-insensitive
 - Instant filtering
-- Server-side file scan (V1)
+- Server-side file scan
 - No advanced query syntax
 
 ---
@@ -200,7 +215,7 @@ Filtering:
   - Light edits
 - Editor model:
   - Plain text editor
-  - Optional preview toggle
+  - Toggle preview with format selection (Markdown, Text, JSON, YAML)
 - No WYSIWYG editor required
 
 ---
@@ -216,85 +231,89 @@ Filtering:
 ### 10.2 Restore
 
 - Notes can be restored from trash
-- No automatic purge in V1
+- No automatic purge
 
 ### 10.3 Version Safety
 
 - Autosave revision counter (`rev`)
 - File-system level backups recommended
-- Full history UI is out of scope for V1
+- Full history UI is out of scope
 
 ---
 
 ## 11. Export & Backup
 
-- Backend supports:
-  - Export all notes as a ZIP archive
-- GUI:
-  - “Download all notes” button
-- Restore:
-  - Handled via scripts later (out of scope for GUI v1)
+- Download individual notes
+- Export all notes as ZIP
+- Export selected notes as ZIP
+- Upload/import `.md` and `.txt` files
+- PDF export with Markdown rendering, metadata headers, and TLP footer
 
 ---
 
-## 12. Keyboard-First Workflow
+## 12. PDF Export
 
-Minimal keyboard shortcuts:
-- Ctrl+N – create new note
-- Ctrl+K – focus search
-- Ctrl+P – pin / unpin current note
-- Esc – exit search / close dialogs
-
-Shortcuts are discoverable via help text (no iconography).
+- Rendered via reportlab
+- Markdown content converted to PDF flowables (headings, paragraphs, code blocks, lists, tables)
+- Falls back to plain-text wrapping when Markdown library unavailable
+- Per-note settings: author, company, version, date, TLP classification
+- Header: title + company/author/version
+- Footer: page numbers + TLP label with color coding
+- TLP levels: CLEAR, GREEN, AMBER, AMBER+STRICT, RED
 
 ---
 
-## 13. UI Style Guide
+## 13. WebDAV Sync
 
-### 13.1 Design Principles
+- Rclone sidecar container syncs notes to any WebDAV server (e.g. Nextcloud)
+- Modes:
+  - Push (local → WebDAV)
+  - Pull (WebDAV → local)
+  - Bisync (two-way)
+- Configurable sync interval (minimum 10 seconds)
+- Safety: "No deletes" option prevents remote deletion propagation
+- UI controls: test connection, manual sync trigger, pause/resume
+- Settings stored in `notes/sync/settings.json`
+- Status tracked in `notes/sync/status.json`
+
+---
+
+## 14. Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+N | New note |
+| Ctrl+K | Search / find in note |
+| Ctrl+H | Search & Replace panel |
+| Ctrl+Shift+R | Rename & Metadata modal |
+| Ctrl+X | Close current tab |
+| Esc | Clear search / close dialogs |
+
+---
+
+## 15. UI Style Guide
+
+### 15.1 Design Principles
 - Clear, distraction-free layout
 - No decorative icons or symbols
 - Text-based controls where possible
 - Full browser width usage
 - Desktop-first
 
-### 13.2 Theme
-- Two themes:
-  - Light
-  - Dark
+### 15.2 Theme
+- Two themes: Light, Dark
 - Nordic-inspired, soft, low-saturation colors
 - Minimal palette
 
-### 13.3 CSS Tokens (semantic)
+### 15.3 CSS Tokens (semantic)
 Use CSS variables:
-- `--bg`
-- `--surface`
-- `--surface-2`
-- `--text`
-- `--muted`
-- `--border`
-- `--accent`
-- `--danger`
-
-### 13.4 Components
-- Notes:
-  - Card-like appearance
-  - Subtle border
-  - Soft background
-  - Modest radius
-- Pinned notes:
-  - Appear first
-  - Slightly different surface tone (no icons)
-- Buttons:
-  - Minimal styling
-  - Text labels
-- Editor:
-  - Plain textarea
-  - Optional preview
+- `--bg`, `--surface`, `--surface-2`
+- `--text`, `--muted`
+- `--border`, `--accent`, `--danger`
 
 ---
 
-## 14. Security Model
+## 16. Security Model
 
 - No authentication
 - No CSRF protection
@@ -304,36 +323,64 @@ Use CSS variables:
 
 ---
 
-## 15. Architecture & Tech Stack
+## 17. Architecture & Tech Stack
 
 ### Backend
-- Python
+- Python 3.12
 - Flask
+- reportlab (PDF generation)
+- pyyaml, markdown
 - File-based storage
 - JSON API
 
 ### Frontend
-- Plain HTML
-- CSS (custom, no framework required)
-- Vanilla JavaScript
+- Plain HTML / CSS / JS (no frameworks)
 - Polling-based updates
 
----
-
-## 16. API Overview (V1)
-
-- `GET /api/notes`
-- `POST /api/notes`
-- `GET /api/notes/{id}`
-- `PUT /api/notes/{id}/content`
-- `PUT /api/notes/{id}/meta`
-- `DELETE /api/notes/{id}`
-- `POST /api/notes/{id}/restore`
-- `GET /api/export/all`
+### Deployment
+- Docker + docker-compose
+- Rclone sidecar container for WebDAV sync
+- Symlink-based releases with rollback support
 
 ---
 
-## 17. Explicit Non-Goals
+## 18. API Overview
+
+### Notes
+- `GET /api/notes` – list notes (with search, sort, filter)
+- `POST /api/notes` – create note
+- `GET /api/notes/{id}` – get note content + metadata
+- `PUT /api/notes/{id}/content` – save content (autosave)
+- `PUT /api/notes/{id}/meta` – update metadata (title, subject, pinned)
+- `DELETE /api/notes/{id}` – soft delete
+- `POST /api/notes/{id}/restore` – restore from trash
+- `GET /api/notes/{id}/download` – download single note
+
+### PDF
+- `GET /api/notes/{id}/pdf-settings` – get PDF metadata
+- `PUT /api/notes/{id}/pdf-settings` – update PDF metadata
+
+### Import & Export
+- `POST /api/notes/import` – upload files as notes
+- `GET /api/export/all` – export all as ZIP
+- `POST /api/export_selected` – export selected as ZIP
+
+### Sync
+- `GET /api/sync/settings` – get sync config
+- `POST /api/sync/settings` – save sync config
+- `GET /api/sync/status` – get sync status
+- `POST /api/sync/run` – trigger manual sync
+- `POST /api/sync/pause` – pause/resume sync
+- `POST /api/sync/test` – test WebDAV connection
+
+### Utility
+- `GET /health` – health check
+- `POST /api/index/rebuild` – rebuild metadata index cache
+- `POST /api/preview/yaml` – validate YAML
+
+---
+
+## 19. Explicit Non-Goals
 
 - Multi-user support
 - Authentication / RBAC

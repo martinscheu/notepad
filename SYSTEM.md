@@ -23,7 +23,8 @@ Structure:
 ├── notes/             # persistent data
 │   ├── notes/
 │   ├── trash/
-│   └── exports/
+│   ├── exports/
+│   └── sync/          # WebDAV sync settings & status
 └── config/
     ├── config.json
     └── compose.env
@@ -61,12 +62,41 @@ Volumes:
 - Last writer wins
 
 ## UI
-- Board view + list view
-- Pinned / unpinned
-- Full-text search
+- Tabbed editor with sidebar notes list
+- Notes grouped by subject with collapsible groups
+- Subject autocomplete from existing subjects
+- Pinned notes appear first
+- Full-text search (filename + content)
+- Search & Replace panel with multi-match highlighting
+- Table of Contents panel with selectable heading depth
+- Markdown / Text / JSON / YAML preview
 - Nordic, low-distraction theme
 - Dark / light mode
 - No icons, text-based controls
+- Deep links via `/?id=<note_id>`
+
+## PDF Export
+- Markdown-rendered PDF via reportlab
+- Per-note metadata: author, company, version, date
+- Header with title + metadata, footer with page numbers
+- TLP classification footer (CLEAR / GREEN / AMBER / AMBER+STRICT / RED) with color coding
+- TLP badge shown in editor header for active note
+
+## WebDAV Sync
+- Rclone sidecar container for WebDAV sync (e.g. Nextcloud)
+- Modes: Push (local → remote), Pull (remote → local), Bisync (two-way)
+- Configurable interval (minimum 10s)
+- Safety option: "No deletes" prevents remote deletion propagation
+- Test connection from UI
+- Manual trigger and pause/resume controls
+- Settings stored in `notes/sync/settings.json`
+- Status tracked in `notes/sync/status.json`
+
+## Import & Export
+- Upload/import `.md` and `.txt` files via UI
+- Download individual notes
+- Export all notes as ZIP
+- Export selected notes as ZIP
 
 ## Out of Scope
 - Multi-user
@@ -74,32 +104,5 @@ Volumes:
 - Attachments
 - Real-time collaboration
 
-## Current State
-- Repo scaffolding complete
-- Bootstrap & deploy scripts complete
-- Docker compose + container wiring complete
-- Flask backend implemented (file storage + API)
-- Frontend implemented (HTML/CSS/JS)
-- Atomic writes for content/metadata
-- Metadata index cache with manual rebuild endpoint (`POST /api/index/rebuild`)
-- Deep links supported via `/?id=<note_id>`
-- Search/replace panel with multi-match highlighting
-- TOC panel with selectable depth and preview anchors
-- Markdown tables supported in preview
-- Manual preview format selection (Markdown / JSON / YAML)
-- JSON pretty-print and validation in preview
-- YAML validation + pretty-print in preview
-- Preview format includes plain text
-- PDF export uses Markdown rendering when preview format is Markdown, otherwise plain text
-- PDF metadata is stored per note (author/company/version/date/TLP) and used in PDF headers with a TLP footer label
-- Active note shows a TLP badge in the editor header
-- Notes grouped by Subject with collapsible groups in the sidebar
-- Upload/import of `.md` and `.txt` files via UI (creates notes from files)
-- Active note highlighted in both tabs and notes list
-
-## Next Steps
-- Optional: add SQLite FTS index for search if notes become large
-- Optional: add basic revision history
-
 ## Current Version
-- 1.1.36
+- 1.1.41
