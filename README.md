@@ -64,7 +64,9 @@ Open:
 
 ## GitHub Codespaces
 
-Click **Code > Codespaces > New codespace** on the repo. The devcontainer installs dependencies and creates data directories automatically. Once ready, run:
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/martinscheu/notepad)
+
+The devcontainer installs dependencies and creates data directories automatically. Once ready, run:
 
 ```bash
 python -m app.backend.server
