@@ -539,6 +539,11 @@ let deleteInProgress = false;
     if(subjectInput){
       subjectInput.value = (t.meta && (t.meta.subject || "")) || "";
     }
+    const dl = document.getElementById("subject-suggestions");
+    if(dl){
+      const subjects = [...new Set(notes.map(n => (n.subject || "").trim()).filter(Boolean))].sort();
+      dl.innerHTML = subjects.map(s => `<option value="${s.replace(/"/g,'&quot;')}">`).join("");
+    }
     setPdfFields((t.meta && t.meta.pdf) || null);
     loadPdfSettingsForActiveNote();
   }
@@ -720,6 +725,19 @@ function fmtTime(iso){
   
   function escapeHtml(s){
     return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  const CITE_START = "\uE200";
+  const CITE_END = "\uE201";
+  const CITE_SEP = "\uE202";
+  const CITE_RE = new RegExp(`${CITE_START}cite${CITE_SEP}([\\s\\S]+?)${CITE_END}`, "g");
+  function normalizeCitations(text){
+    if(!text) return text;
+    const replaced = String(text).replace(CITE_RE, (_m, inner) => {
+      const parts = String(inner || "").split(CITE_SEP).filter(Boolean);
+      return parts.length ? `[cite: ${parts.join(", ")}]` : "[cite]";
+    });
+    return replaced.replace(new RegExp(`[${CITE_START}${CITE_SEP}${CITE_END}]`, "g"), "");
   }
 
   function slugifyHeading(s){
@@ -1404,7 +1422,18 @@ function renderTabs(){
     const t = getActiveTab();
     if(!t) return;
 
-    const content = elEditor.value;
+    const raw = elEditor.value;
+    const content = normalizeCitations(raw);
+    if(content !== raw){
+      const start = elEditor.selectionStart;
+      const end = elEditor.selectionEnd;
+      elEditor.value = content;
+      elEditor.selectionStart = Math.min(start, content.length);
+      elEditor.selectionEnd = Math.min(end, content.length);
+      if(previewMode && elPreview){ renderPreview(); }
+      updateEditorHighlight();
+      updateToc();
+    }
     setSaveState("Saving...", "");
 
     try{
@@ -1681,6 +1710,23 @@ async function renameNote(){
     t.content = elEditor.value;
     updateEditorHighlight();
     updateToc();
+  });
+  elEditor.addEventListener("paste", (e) => {
+    const cb = e.clipboardData;
+    if(!cb) return;
+    const text = cb.getData("text/plain");
+    if(!text) return;
+    const normalized = normalizeCitations(text);
+    if(normalized === text) return;
+    e.preventDefault();
+    const start = elEditor.selectionStart;
+    const end = elEditor.selectionEnd;
+    const value = elEditor.value;
+    elEditor.value = value.slice(0, start) + normalized + value.slice(end);
+    const caret = start + normalized.length;
+    elEditor.selectionStart = caret;
+    elEditor.selectionEnd = caret;
+    elEditor.dispatchEvent(new Event("input", {bubbles: true}));
   });
   elEditor.addEventListener("scroll", syncEditorHighlightScroll);
 
