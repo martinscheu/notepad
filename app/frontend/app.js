@@ -560,11 +560,11 @@ let deleteInProgress = false;
     }
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden","false");
-    if(mode !== "metadata" && input){
+    if(input){
       input.value = (t.meta && (t.meta.title || t.meta.display_title || t.meta.user_title || "")) || "";
-      setTimeout(() => { input.focus(); input.select(); }, 0);
+      if(mode !== "metadata") setTimeout(() => { input.focus(); input.select(); }, 0);
     }
-    if(mode !== "metadata" && subjectInput){
+    if(subjectInput){
       subjectInput.value = (t.meta && (t.meta.subject || "")) || "";
     }
     const dl = document.getElementById("subject-suggestions");
@@ -1001,6 +1001,7 @@ function fmtTime(iso){
         if(data && data.ok){
           const pretty = data.pretty || "";
           elPreview.innerHTML = `<pre><code class="language-yaml">${escapeHtml(pretty)}</code></pre>`;
+          injectCopyButtons();
         } else {
           const msg = (data && data.error) ? data.error : "Invalid YAML";
           elPreview.innerHTML = `<div class="muted">YAML error: ${escapeHtml(msg)}</div>`;
@@ -1023,6 +1024,7 @@ function fmtTime(iso){
         const parsed = JSON.parse(trimmed);
         const pretty = JSON.stringify(parsed, null, 2);
         elPreview.innerHTML = `<pre><code class="language-json">${escapeHtml(pretty)}</code></pre>`;
+        injectCopyButtons();
       }catch(e){
         const msg = e && e.message ? e.message : String(e);
         elPreview.innerHTML = `<div class="muted">JSON error: ${escapeHtml(msg)}</div>`;
@@ -1032,10 +1034,47 @@ function fmtTime(iso){
 
     if(previewFormat === "txt"){
       elPreview.innerHTML = `<pre><code class="language-text">${escapeHtml(text)}</code></pre>`;
+      injectCopyButtons();
       return;
     }
 
     elPreview.innerHTML = renderMarkdown(text);
+    injectCopyButtons();
+  }
+
+  function copyToClipboard(text){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(text).catch(() => copyFallback(text));
+    }
+    return copyFallback(text);
+  }
+  function copyFallback(text){
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;left:-9999px;top:-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    return Promise.resolve();
+  }
+
+  function injectCopyButtons(){
+    if(!elPreview) return;
+    elPreview.querySelectorAll("pre").forEach(pre => {
+      const btn = document.createElement("button");
+      btn.className = "copy-btn";
+      btn.textContent = "Copy";
+      btn.addEventListener("click", () => {
+        const code = pre.querySelector("code");
+        const txt = code ? code.textContent : pre.textContent;
+        copyToClipboard(txt).then(() => {
+          btn.textContent = "Copied";
+          setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+        });
+      });
+      pre.appendChild(btn);
+    });
   }
 
   function setPreviewMode(on){
@@ -1233,6 +1272,30 @@ function enableActions(enabled){
     }
   }
 
+  const TLP_CYCLE = ["CLEAR", "GREEN", "AMBER", "AMBER+STRICT", "RED"];
+  async function cycleTlp(){
+    const t = getActiveTab();
+    if(!t || !t.meta) return;
+    const cur = (t.meta.pdf && t.meta.pdf.tlp) ? String(t.meta.pdf.tlp).toUpperCase() : "AMBER";
+    const idx = TLP_CYCLE.indexOf(cur);
+    const next = TLP_CYCLE[(idx + 1) % TLP_CYCLE.length];
+    const pdf = Object.assign({}, t.meta.pdf || {}, {tlp: next});
+    try{
+      const res = await apiPut(
+        `/api/notes/${encodeURIComponent(t.noteId)}/pdf-settings`,
+        pdf
+      );
+      if(res && res.pdf) t.meta.pdf = res.pdf;
+      if(res && res.meta && res.meta.encrypted !== undefined){
+        t.meta.encrypted = res.meta.encrypted;
+        setEncryptedBadge(t.meta);
+      }
+      setTlpBadge(t.meta);
+    }catch(e){
+      console.error("TLP update failed:", e);
+    }
+  }
+
   function makeNoteRow(meta, isActive){
     const row = document.createElement("div");
     row.className = "note-row" + (meta.pinned ? " pinned" : "") + (isActive ? " active" : "");
@@ -1392,6 +1455,14 @@ function renderTabs(){
     const t = tabs.find(x => x.tabId === tabId);
     if(!t) return;
 
+    // Save cursor/scroll of the tab we're leaving
+    const prev = tabs.find(x => x.tabId === activeTabId);
+    if(prev && prev.tabId !== tabId){
+      prev._cursor = elEditor.selectionStart;
+      prev._scroll = elEditor.scrollTop;
+      saveCursorPos(prev.noteId, prev._cursor, prev._scroll);
+    }
+
     activeTabId = tabId;
 
     if(mruMode === "mru"){
@@ -1417,6 +1488,29 @@ function renderTabs(){
     updatePinButton();
     updateToc();
     elEditor.focus();
+    if(t._cursor == null){
+      const saved = loadCursorPos(t.noteId);
+      if(saved){ t._cursor = saved.c; t._scroll = saved.s; }
+    }
+    const pos = t._cursor != null ? t._cursor : 0;
+    const scr = t._scroll != null ? t._scroll : 0;
+    elEditor.setSelectionRange(pos, pos);
+    elEditor.scrollTop = scr;
+    requestAnimationFrame(() => { elEditor.scrollTop = scr; });
+  }
+
+  function saveCursorPos(noteId, cursor, scroll){
+    try{
+      const store = JSON.parse(localStorage.getItem("sn_cursor") || "{}");
+      store[noteId] = {c: cursor, s: scroll};
+      localStorage.setItem("sn_cursor", JSON.stringify(store));
+    }catch(e){}
+  }
+  function loadCursorPos(noteId){
+    try{
+      const store = JSON.parse(localStorage.getItem("sn_cursor") || "{}");
+      return store[noteId] || null;
+    }catch(e){ return null; }
   }
 
   function newTabId(){
@@ -1514,6 +1608,7 @@ function renderTabs(){
 
       setSaveState("Saved", res.updated);
       setFileName(t.meta);
+      saveCursorPos(t.noteId, elEditor.selectionStart, elEditor.scrollTop);
       await loadNotes();
       renderTabs();
     }catch(e){
@@ -1769,11 +1864,28 @@ async function renameNote(){
   if(elReplaceBtn) elReplaceBtn.addEventListener("click", openReplaceModal);
   const elMetadataBtn = $("metadataBtn");
   if(elMetadataBtn) elMetadataBtn.addEventListener("click", () => openRenameModal("metadata"));
+  const elTlpBadge = $("tlpBadge");
+  if(elTlpBadge) elTlpBadge.addEventListener("click", cycleTlp);
   if(elPreviewFormat){
     elPreviewFormat.addEventListener("change", () => setPreviewFormat(elPreviewFormat.value));
   }
   bindReplaceModal();
   bindRenameModal();
+
+  window.addEventListener("beforeunload", () => {
+    const t = getActiveTab();
+    if(t) saveCursorPos(t.noteId, elEditor.selectionStart, elEditor.scrollTop);
+  });
+
+  let _cursorSaveTimer = null;
+  elEditor.addEventListener("scroll", () => {
+    const t = getActiveTab();
+    if(!t) return;
+    t._cursor = elEditor.selectionStart;
+    t._scroll = elEditor.scrollTop;
+    if(_cursorSaveTimer) clearTimeout(_cursorSaveTimer);
+    _cursorSaveTimer = setTimeout(() => saveCursorPos(t.noteId, t._cursor, t._scroll), 500);
+  });
 
   elEditor.addEventListener("input", () => {
     if(previewMode && elPreview){ renderPreview(); }

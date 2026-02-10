@@ -276,6 +276,7 @@ body{
   background: var(--surface);
   color: var(--text);
   line-height: 1.2;
+  cursor: pointer;
 }
 .tlp-badge.hidden{
   display: none;
@@ -567,8 +568,11 @@ body{
 .preview ul,.preview ol{margin:0.4em 0 0.4em 1.2em;}
 .preview li{margin:0.2em 0;}
 .preview code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:0.95em;background:var(--surface-2);border:1px solid var(--border);padding:1px 6px;border-radius:8px;}
-.preview pre{background:var(--surface-2);border:1px solid var(--border);padding:12px;border-radius:12px;overflow:auto;}
+.preview pre{background:var(--surface-2);border:1px solid var(--border);padding:12px;border-radius:12px;overflow:auto;position:relative;}
 .preview pre code{background:transparent;border:0;padding:0;}
+.preview pre .copy-btn{position:absolute;top:6px;right:6px;padding:2px 8px;font-size:11px;line-height:1.4;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--muted);cursor:pointer;opacity:0;transition:opacity 0.15s;}
+.preview pre:hover .copy-btn{opacity:1;}
+.preview pre .copy-btn:hover{color:var(--text);border-color:var(--accent);}
 .preview blockquote{margin:0.5em 0;padding:0.2em 0 0.2em 0.8em;border-left:3px solid var(--border);color:var(--muted);}
 .preview hr{border:0;border-top:1px solid var(--border);margin:0.9em 0;}
 .preview table{width:100%;border-collapse:collapse;margin:0.6em 0;font-size:0.95em;}
