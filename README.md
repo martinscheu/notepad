@@ -8,6 +8,12 @@ Simple self-hosted sticky notes / scratchpad web app.
 - LAN/VPN only
 - Dark / light theme (Nordic style)
 
+## Screenshots
+
+![Light theme](docs/screenshots/notes-light.png)
+
+![Dark theme](docs/screenshots/notes-dark.png)
+
 ## Features
 
 - **Tabs** – open multiple notes, switch with click or keyboard
