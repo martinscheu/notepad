@@ -478,16 +478,18 @@ body{
 }
 
 .editor-highlight .hl{
-  background: var(--hl-match, rgba(180,160,60,0.25));
+  background: rgba(200,180,60,0.3);
   color: transparent;
   border-radius: 2px;
+  border-bottom: 2px solid rgba(180,160,40,0.5);
 }
 .editor-highlight .hl-current{
-  background: var(--hl-current, rgba(220,140,20,0.55));
+  background: rgba(255,120,0,0.45);
   color: transparent;
   border-radius: 2px;
-  outline: 2px solid var(--hl-current-border, rgba(220,140,20,0.8));
-  outline-offset: -1px;
+  outline: 2px solid rgba(255,100,0,0.8);
+  outline-offset: 0px;
+  border-bottom: 2px solid rgba(255,100,0,0.9);
 }
 
 .replace-panel{

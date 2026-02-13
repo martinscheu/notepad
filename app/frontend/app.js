@@ -2227,6 +2227,15 @@ async function renameNote(){
     elEditor.dispatchEvent(new Event("input", {bubbles: true}));
   });
   elEditor.addEventListener("scroll", syncEditorHighlightScroll);
+  document.addEventListener("selectionchange", () => {
+    if(document.activeElement === elEditor){
+      const panel = document.getElementById("replace-panel");
+      if(panel && !panel.classList.contains("hidden")){
+        updateReplaceCount();
+        updateEditorHighlight();
+      }
+    }
+  });
 
   // Keyboard shortcuts
   window.addEventListener("keydown", (e) => {

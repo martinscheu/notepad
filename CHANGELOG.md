@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.6
+
+- **Search & Replace: distinct current match** — all matches get a soft yellow highlight; the current/focused match gets a strong orange background with outline, making it immediately obvious which match is active. Current match tracks cursor position in real time.
+
 ## 1.2.5
 
 - **Search & Replace: scroll sync fix** — highlight overlay now uses transform-based positioning with scrollbar width compensation, so highlights stay aligned with editor text during scrolling.
