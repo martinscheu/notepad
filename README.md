@@ -21,7 +21,7 @@ Simple self-hosted sticky notes / scratchpad web app.
 - **Autosave** – saves on every keystroke (debounced), no save button
 - **Markdown preview** – toggle preview with format selection (Markdown, Text, JSON, YAML)
 - **Search** – full-text search across filenames and content (Ctrl+K)
-- **Search & Replace** – in-note find/replace with match highlighting
+- **Search & Replace** – in-note find/replace with inverted match highlighting, find prev/next navigation
 - **Table of Contents** – TOC panel with selectable heading depth
 - **Daily Journal** – Logseq-inspired daily journal with collapsible year/month/day tree, aggregated views, and Ctrl+J shortcut
 - **Subjects** – group notes by subject; autocomplete from existing subjects

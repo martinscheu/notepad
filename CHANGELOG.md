@@ -1,18 +1,11 @@
 # Changelog
 
-## 1.2.6
+## 1.2.10
 
-- **Search & Replace: distinct current match** — all matches get a soft yellow highlight; the current/focused match gets a strong orange background with outline, making it immediately obvious which match is active. Current match tracks cursor position in real time.
-
-## 1.2.5
-
-- **Search & Replace: scroll sync fix** — highlight overlay now uses transform-based positioning with scrollbar width compensation, so highlights stay aligned with editor text during scrolling.
+- **Search & Replace: inverted match highlighting** — all matches now show inverted text (white on dark in light mode, dark on white in dark mode) via a dual-overlay system. The focused match has a stronger opaque background with outline; other matches use a slightly transparent version of the same style. Highlights scroll in sync with the editor using transform-based positioning and scrollbar width compensation.
 - **Search & Replace: Find previous** — added "Find prev" button to navigate matches backwards.
+- **Search & Replace: live current match tracking** — current match updates in real time as you click or arrow through the editor.
 - **Undo / Redo buttons** — added Undo and Redo buttons to the topbar for quick access in edit mode (uses the browser's native undo stack).
-
-## 1.2.4
-
-- **Search & Replace highlight fixes** — highlight overlay now scrolls in sync with the editor (was clipped and drifting). Current match shown in distinct orange with outline; other matches shown in subtle yellow. Easier to see which match will be replaced next.
 
 ## 1.2.3
 

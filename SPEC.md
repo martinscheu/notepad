@@ -170,7 +170,7 @@ Notes:
 
 ### 7.1 Layout
 
-- **Top bar** – brand, search, grouped action buttons (New/Upload, Preview, Rename/Pin/Download, More/Settings)
+- **Top bar** – brand, search, grouped action buttons (New/Upload, Undo/Redo/Preview, Rename/Pin/Download, More/Settings)
 - **Sidebar** – notes list grouped by subject, sortable, with bulk actions
 - **Tabs bar** – open notes as tabs, save state indicator
 - **Editor** – plain textarea with optional preview
