@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.5
+
+- **Search & Replace: scroll sync fix** — highlight overlay now uses transform-based positioning with scrollbar width compensation, so highlights stay aligned with editor text during scrolling.
+- **Search & Replace: Find previous** — added "Find prev" button to navigate matches backwards.
+- **Undo / Redo buttons** — added Undo and Redo buttons to the topbar for quick access in edit mode (uses the browser's native undo stack).
+
 ## 1.2.4
 
 - **Search & Replace highlight fixes** — highlight overlay now scrolls in sync with the editor (was clipped and drifting). Current match shown in distinct orange with outline; other matches shown in subtle yellow. Easier to see which match will be replaced next.

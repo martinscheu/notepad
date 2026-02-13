@@ -456,10 +456,17 @@ body{
   background: color-mix(in srgb, var(--surface), var(--accent) 6%);
 }
 
+.editor, .editor-highlight{
+  box-sizing: border-box;
+}
 .editor-highlight{
   position: absolute;
   inset: 0;
-  overflow: auto;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+.editor-highlight-inner{
   padding: 14px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
@@ -467,11 +474,8 @@ body{
   color: transparent;
   white-space: pre-wrap;
   word-wrap: break-word;
-  pointer-events: none;
-  z-index: 1;
-  scrollbar-width: none;
+  will-change: transform;
 }
-.editor-highlight::-webkit-scrollbar{ display: none; }
 
 .editor-highlight .hl{
   background: var(--hl-match, rgba(180,160,60,0.25));

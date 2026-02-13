@@ -84,7 +84,9 @@ function renderTabsSafe(){
   const elDownloadBtn = $("downloadBtn");
   const elMoreBtn = $("moreBtn");
   const elFileView = $("fileViewToggle");
-  
+  const elUndo = $("undoBtn");
+  const elRedo = $("redoBtn");
+
   const elPreview = $("preview");
   const elEditor = $("editor");
   const elEditorHighlight = $("editorHighlight");
@@ -193,6 +195,25 @@ let deleteInProgress = false;
     return null;
   }
 
+  function findPrevMatch(text, query, beforeIndex, matchCase, wholeWord){
+    if(!query) return null;
+    const hay = matchCase ? text : text.toLowerCase();
+    const needle = matchCase ? query : query.toLowerCase();
+    let idx = hay.lastIndexOf(needle, Math.max(0, beforeIndex - 1));
+    while(idx !== -1){
+      if(wholeWord){
+        const before = idx > 0 ? text[idx - 1] : "";
+        const after = (idx + query.length < text.length) ? text[idx + query.length] : "";
+        if(isWordChar(before) || isWordChar(after)){
+          idx = hay.lastIndexOf(needle, idx - 1);
+          continue;
+        }
+      }
+      return { start: idx, end: idx + query.length };
+    }
+    return null;
+  }
+
   function updateEditorValueAndSchedule(value){
     elEditor.value = value;
     if(previewMode && elPreview){ renderPreview(); }
@@ -263,31 +284,44 @@ let deleteInProgress = false;
     return idx === -1 ? 0 : idx;
   }
 
+  function setHighlightContent(html){
+    elEditorHighlight.innerHTML = `<div class="editor-highlight-inner">${html}</div>`;
+    syncEditorHighlightScroll();
+  }
+
   function updateEditorHighlight(){
     if(!elEditorHighlight) return;
     const text = elEditor.value || "";
     const status = document.getElementById("replace-status");
     if(text.length > 50000){
-      elEditorHighlight.innerHTML = escapeForHighlight(text);
+      setHighlightContent(escapeForHighlight(text));
       if(status) status.textContent = "Highlight disabled for large notes.";
       return;
     }
     const { matchCase, wholeWord, query } = getReplaceOptions();
     if(!query){
-      elEditorHighlight.innerHTML = escapeForHighlight(text);
+      setHighlightContent(escapeForHighlight(text));
       return;
     }
     const matches = computeMatches(text, query, matchCase, wholeWord);
     const curIdx = matches.length ? getCurrentMatchIndex(matches) : -1;
-    elEditorHighlight.innerHTML = buildHighlightHtml(text, matches, curIdx);
-    syncEditorHighlightScroll();
+    setHighlightContent(buildHighlightHtml(text, matches, curIdx));
+  }
+
+  function syncHighlightGeometry(){
+    if(!elEditorHighlight) return;
+    const sbw = elEditor.offsetWidth - elEditor.clientWidth;
+    elEditorHighlight.style.right = sbw + "px";
   }
 
   function syncEditorHighlightScroll(){
     if(!elEditorHighlight) return;
+    syncHighlightGeometry();
+    const inner = elEditorHighlight.firstElementChild;
+    if(!inner) return;
     requestAnimationFrame(() => {
-      elEditorHighlight.scrollTop = elEditor.scrollTop;
-      elEditorHighlight.scrollLeft = elEditor.scrollLeft;
+      inner.style.transform =
+        `translate(${-elEditor.scrollLeft}px, ${-elEditor.scrollTop}px)`;
     });
   }
 
@@ -384,6 +418,28 @@ let deleteInProgress = false;
           findInput.setSelectionRange(selStart, selEnd);
         }
       }
+    } else {
+      const status = document.getElementById("replace-status");
+      if(status) status.textContent = "No match found.";
+    }
+    updateReplaceCount();
+    updateEditorHighlight();
+  }
+
+  function findInCurrentNotePrev(){
+    const { matchCase, wholeWord, query } = getReplaceOptions();
+    if(!query) return;
+    const t = getActiveTab();
+    if(!t) return;
+    const text = elEditor.value || "";
+    const before = elEditor.selectionStart || text.length;
+    let match = findPrevMatch(text, query, before, matchCase, wholeWord);
+    if(!match && before < text.length){
+      match = findPrevMatch(text, query, text.length, matchCase, wholeWord);
+    }
+    if(match){
+      elEditor.focus();
+      elEditor.setSelectionRange(match.start, match.end);
     } else {
       const status = document.getElementById("replace-status");
       if(status) status.textContent = "No match found.";
@@ -708,6 +764,8 @@ let deleteInProgress = false;
     panel.dataset.bound = "1";
     const elReplaceClose = document.getElementById("replace-close");
     if(elReplaceClose) elReplaceClose.addEventListener("click", closeReplaceModal);
+    const elFindPrev = document.getElementById("replace-find-prev");
+    if(elFindPrev) elFindPrev.addEventListener("click", findInCurrentNotePrev);
     const elFindNext = document.getElementById("replace-find-next");
     if(elFindNext) elFindNext.addEventListener("click", () => findInCurrentNote(true, true, false));
     const elReplaceNext = document.getElementById("replace-next");
@@ -2078,6 +2136,8 @@ async function renameNote(){
   if(elDeleteSelected) elDeleteSelected.addEventListener("click", deleteSelected);
   if(elRename){ elRename.addEventListener("click", renameNote); }
   elPreviewToggle.addEventListener("click", () => setPreviewMode(!previewMode));
+  if(elUndo) elUndo.addEventListener("click", () => { elEditor.focus(); document.execCommand("undo"); });
+  if(elRedo) elRedo.addEventListener("click", () => { elEditor.focus(); document.execCommand("redo"); });
   if(elPin){ elPin.addEventListener("click", togglePin); }
   if(elTocToggle){ elTocToggle.addEventListener("click", () => { closeDropdowns(); setTocOpen(tocOpen !== "on"); }); }
   if(elTocDepth){ elTocDepth.addEventListener("change", updateToc); }

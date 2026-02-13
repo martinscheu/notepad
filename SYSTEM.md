@@ -107,4 +107,4 @@ Volumes:
 - Real-time collaboration
 
 ## Current Version
-- 1.2.4
+- 1.2.5
