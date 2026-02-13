@@ -235,19 +235,32 @@ let deleteInProgress = false;
     return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  function buildHighlightHtml(text, matches){
+  function buildHighlightHtml(text, matches, currentIdx){
     if(!matches.length){
       return escapeForHighlight(text);
     }
     let out = "";
     let last = 0;
-    for(const m of matches){
+    for(let i = 0; i < matches.length; i++){
+      const m = matches[i];
       out += escapeForHighlight(text.slice(last, m.start));
-      out += `<span class="hl">${escapeForHighlight(text.slice(m.start, m.end))}</span>`;
+      const cls = i === currentIdx ? "hl-current" : "hl";
+      const id = i === currentIdx ? ' id="hl-active"' : "";
+      out += `<span class="${cls}"${id}>${escapeForHighlight(text.slice(m.start, m.end))}</span>`;
       last = m.end;
     }
     out += escapeForHighlight(text.slice(last));
     return out;
+  }
+
+  function getCurrentMatchIndex(matches){
+    const selStart = elEditor.selectionStart || 0;
+    const selEnd = elEditor.selectionEnd || 0;
+    let idx = matches.findIndex(m => m.start === selStart && m.end === selEnd);
+    if(idx === -1){
+      idx = matches.findIndex(m => m.start >= selStart);
+    }
+    return idx === -1 ? 0 : idx;
   }
 
   function updateEditorHighlight(){
@@ -265,14 +278,17 @@ let deleteInProgress = false;
       return;
     }
     const matches = computeMatches(text, query, matchCase, wholeWord);
-    elEditorHighlight.innerHTML = buildHighlightHtml(text, matches);
+    const curIdx = matches.length ? getCurrentMatchIndex(matches) : -1;
+    elEditorHighlight.innerHTML = buildHighlightHtml(text, matches, curIdx);
     syncEditorHighlightScroll();
   }
 
   function syncEditorHighlightScroll(){
     if(!elEditorHighlight) return;
-    elEditorHighlight.scrollTop = elEditor.scrollTop;
-    elEditorHighlight.scrollLeft = elEditor.scrollLeft;
+    requestAnimationFrame(() => {
+      elEditorHighlight.scrollTop = elEditor.scrollTop;
+      elEditorHighlight.scrollLeft = elEditor.scrollLeft;
+    });
   }
 
   function updateToc(){
@@ -373,6 +389,7 @@ let deleteInProgress = false;
       if(status) status.textContent = "No match found.";
     }
     updateReplaceCount();
+    updateEditorHighlight();
   }
 
   function openReplaceModal(){

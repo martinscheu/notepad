@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.4
+
+- **Search & Replace highlight fixes** — highlight overlay now scrolls in sync with the editor (was clipped and drifting). Current match shown in distinct orange with outline; other matches shown in subtle yellow. Easier to see which match will be replaced next.
+
 ## 1.2.3
 
 - **German umlaut transliteration** — filenames, PDF downloads, and markdown downloads now transliterate German umlauts (ä→ae, ö→oe, ü→ue, ß→ss) and strip other diacritics via NFKD normalization, both server-side and client-side.

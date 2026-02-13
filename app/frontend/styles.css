@@ -459,7 +459,7 @@ body{
 .editor-highlight{
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  overflow: auto;
   padding: 14px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
@@ -469,12 +469,21 @@ body{
   word-wrap: break-word;
   pointer-events: none;
   z-index: 1;
+  scrollbar-width: none;
 }
+.editor-highlight::-webkit-scrollbar{ display: none; }
 
 .editor-highlight .hl{
-  background: color-mix(in srgb, var(--accent), transparent 55%);
+  background: var(--hl-match, rgba(180,160,60,0.25));
   color: transparent;
   border-radius: 2px;
+}
+.editor-highlight .hl-current{
+  background: var(--hl-current, rgba(220,140,20,0.55));
+  color: transparent;
+  border-radius: 2px;
+  outline: 2px solid var(--hl-current-border, rgba(220,140,20,0.8));
+  outline-offset: -1px;
 }
 
 .replace-panel{
