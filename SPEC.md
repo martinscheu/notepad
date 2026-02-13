@@ -50,6 +50,7 @@ Target environment:
 ├── current -> /opt/stickynotes/releases/<version>
 ├── notes/
 │   ├── notes/
+│   ├── journal/       # Daily journal entries
 │   ├── trash/
 │   ├── exports/
 │   └── sync/          # WebDAV sync settings & status
@@ -220,6 +221,24 @@ Filtering:
 
 ---
 
+## 9b. Daily Journal
+
+- Logseq-inspired daily journal entries stored in `/data/journal/`
+- Each entry has `subject: "Journal"` and title format `YYYY-MM-DD DayName`
+- Created via "Journal" button or **Ctrl+J** (uses browser local date)
+- Idempotent: clicking again on the same day reopens the existing entry
+- Sidebar shows a collapsible year/month/day tree pinned above regular notes
+  - Current year and month auto-expanded; older periods collapsed
+  - Collapse state persisted in localStorage
+- Clicking a day opens the note in an editable tab
+- Clicking a month or year label opens an aggregated read-only preview tab
+- All existing features work: encryption, PDF export, rename, delete, restore, search
+- Restored journal notes return to the journal directory (not notes)
+- Export ZIP includes `journal/` folder
+- WebDAV sync includes journal directory
+
+---
+
 ## 10. Note Lifecycle
 
 ### 10.1 Deletion
@@ -283,6 +302,7 @@ Filtering:
 | Shortcut | Action |
 |---|---|
 | Ctrl+N | New note |
+| Ctrl+J | Open today's journal |
 | Ctrl+K | Search / find in note |
 | Ctrl+H | Search & Replace panel |
 | Ctrl+Shift+R | Rename modal |
@@ -359,6 +379,10 @@ Use CSS variables:
 ### PDF
 - `GET /api/notes/{id}/pdf-settings` – get PDF metadata
 - `PUT /api/notes/{id}/pdf-settings` – update PDF metadata
+
+### Journal
+- `POST /api/journal/today` – create or open today's journal entry
+- `GET /api/journal/aggregate?year=&month=` – aggregated content for a period
 
 ### Import & Export
 - `POST /api/notes/import` – upload files as notes

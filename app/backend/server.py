@@ -10,6 +10,7 @@ import time
 import os
 import re
 import shutil
+import unicodedata
 import zipfile
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -363,6 +364,7 @@ CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/config"))
 
 NOTES_DIR = DATA_DIR / "notes"
 TRASH_DIR = DATA_DIR / "trash"
+JOURNAL_DIR = DATA_DIR / "journal"
 EXPORTS_DIR = DATA_DIR / "exports"
 INDEX_PATH = DATA_DIR / "index.json"
 PDF_SETTINGS_PATH = CONFIG_DIR / "pdf_settings.json"
@@ -378,6 +380,7 @@ def utc_now_iso() -> str:
 def ensure_dirs() -> None:
     NOTES_DIR.mkdir(parents=True, exist_ok=True)
     TRASH_DIR.mkdir(parents=True, exist_ok=True)
+    JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
     _maybe_migrate_pdf_settings()
 
@@ -491,10 +494,25 @@ def gen_id() -> str:
     return secrets.token_hex(4)  # 8 hex chars
 
 
+_UMLAUT_MAP = str.maketrans({
+    "ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss",
+    "Ä": "Ae", "Ö": "Oe", "Ü": "Ue",
+})
+
+
+def _transliterate(text: str) -> str:
+    """Replace German umlauts explicitly, then NFKD-decompose other accented chars."""
+    text = text.translate(_UMLAUT_MAP)
+    # Decompose accented characters (é→e+combining-accent) then strip combining marks
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in nfkd if unicodedata.category(ch) != "Mn")
+
+
 def slugify_title(title: str) -> str:
     title = title.strip()
     if not title:
         return ""
+    title = _transliterate(title)
     title = SAFE_TITLE_RE.sub("-", title).strip("-")
     return title[:60]
 
@@ -598,18 +616,21 @@ def _maybe_migrate_pdf_settings() -> None:
     base["version"] = str(data.get("version", "")).strip()
 
     needs_migration = False
-    for meta_path in NOTES_DIR.glob("*.json"):
-        try:
-            meta = load_json(meta_path)
-        except Exception:
-            continue
-        if not isinstance(meta.get("pdf"), dict):
-            needs_migration = True
+    for scan_dir in [NOTES_DIR, JOURNAL_DIR]:
+        for meta_path in scan_dir.glob("*.json"):
+            try:
+                meta = load_json(meta_path)
+            except Exception:
+                continue
+            if not isinstance(meta.get("pdf"), dict):
+                needs_migration = True
+                break
+        if needs_migration:
             break
     if not needs_migration:
         return
 
-    for meta_path in NOTES_DIR.glob("*.json"):
+    for meta_path in list(NOTES_DIR.glob("*.json")) + list(JOURNAL_DIR.glob("*.json")):
         try:
             meta = load_json(meta_path)
         except Exception:
@@ -640,7 +661,7 @@ class _index_lock:
 def rebuild_index() -> List[Dict[str, Any]]:
     with _index_lock():
         metas = []
-        for base_dir, deleted in [(NOTES_DIR, False), (TRASH_DIR, True)]:
+        for base_dir, deleted in [(NOTES_DIR, False), (JOURNAL_DIR, False), (TRASH_DIR, True)]:
             for meta in base_dir.glob("*.json"):
                 try:
                     m = load_json(meta)
@@ -677,17 +698,20 @@ def update_index_meta(meta: Dict[str, Any]) -> None:
 
 
 def find_note_files_by_id(note_id: str) -> Tuple[Optional[Path], Optional[Path], bool]:
-    for base_dir, deleted in [(NOTES_DIR, False), (TRASH_DIR, True)]:
+    for base_dir, deleted in [(NOTES_DIR, False), (JOURNAL_DIR, False), (TRASH_DIR, True)]:
         for meta in base_dir.glob("*.json"):
             try:
                 m = load_json(meta)
             except Exception:
                 continue
             if m.get("id") == note_id:
-                # content may be md or txt; md preferred
-                md = meta.with_suffix(".md")
-                txt = meta.with_suffix(".txt")
-                content = md if md.exists() else (txt if txt.exists() else None)
+                # content may be md, txt, yaml, or yml
+                content = None
+                for _ext in (".md", ".txt", ".yaml", ".yml"):
+                    candidate = meta.with_suffix(_ext)
+                    if candidate.exists():
+                        content = candidate
+                        break
                 return (content, meta, deleted)
     return (None, None, False)
 
@@ -899,7 +923,7 @@ def api_import_notes():
 
         safe_name = Path(filename).name
         ext = Path(safe_name).suffix.lower().lstrip(".")
-        if ext not in ("md", "txt"):
+        if ext not in ("md", "txt", "yaml", "yml"):
             errors.append({"file": safe_name, "error": "Unsupported file type"})
             continue
 
@@ -985,7 +1009,7 @@ def api_save_content(note_id: str):
         fn = meta.get("filename")
         if not fn:
             return jsonify({"error": "Corrupt note (missing filename)"}), 500
-        content_path = NOTES_DIR / fn
+        content_path = meta_path.parent / fn
 
     write_note_content(content_path, content, meta)
     save_json(meta_path, meta)
@@ -1027,8 +1051,8 @@ def api_update_meta(note_id: str):
         else:
             new_basename = f"{created_stamp}_{note_id}"
 
-        new_content = NOTES_DIR / f"{new_basename}.{ext}"
-        new_meta = NOTES_DIR / f"{new_basename}.json"
+        new_content = meta_path.parent / f"{new_basename}.{ext}"
+        new_meta = meta_path.parent / f"{new_basename}.json"
 
         if (new_content.exists() and (content_path is None or new_content.resolve() != content_path.resolve())) or \
            (new_meta.exists() and new_meta.resolve() != meta_path.resolve()):
@@ -1100,8 +1124,9 @@ def api_restore_note(note_id: str):
     meta["updated"] = utc_now_iso()
     meta["rev"] = int(meta.get("rev", 0)) + 1
 
-    target_meta = NOTES_DIR / meta_path.name
-    target_content = NOTES_DIR / (content_path.name if content_path else meta.get("filename", ""))
+    restore_dir = JOURNAL_DIR if meta.get("subject") == "Journal" else NOTES_DIR
+    target_meta = restore_dir / meta_path.name
+    target_content = restore_dir / (content_path.name if content_path else meta.get("filename", ""))
 
     if content_path and content_path.exists():
         shutil.move(str(content_path), str(target_content))
@@ -1128,7 +1153,7 @@ def api_download_note(note_id: str):
 
     title = (meta.get("title") or "").strip()
     if title:
-        safe = SAFE_TITLE_RE.sub("-", title).strip("-")[:80] or "note"
+        safe = SAFE_TITLE_RE.sub("-", _transliterate(title)).strip("-")[:80] or "note"
         dl_name = f"{safe}.md"
     else:
         dl_name = meta.get("filename") or f"{note_id}.md"
@@ -1147,13 +1172,13 @@ def api_export_all():
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
-        for base_dir, folder in [(NOTES_DIR, "notes"), (TRASH_DIR, "trash")]:
+        for base_dir, folder in [(NOTES_DIR, "notes"), (JOURNAL_DIR, "journal"), (TRASH_DIR, "trash")]:
             if base_dir == TRASH_DIR and not include_deleted:
                 continue
             for p in base_dir.iterdir():
                 if p.is_file() and p.suffix == ".json":
                     z.write(p, arcname=f"{folder}/{p.name}")
-                elif p.is_file() and p.suffix in (".md", ".txt"):
+                elif p.is_file() and p.suffix in (".md", ".txt", ".yaml", ".yml"):
                     # Decrypt content for export
                     meta_path = p.with_suffix(".json")
                     meta = {}
@@ -1439,7 +1464,7 @@ def api_delete_encryption_settings():
     ensure_dirs()
     decrypted = 0
     errors = 0
-    for base_dir in [NOTES_DIR, TRASH_DIR]:
+    for base_dir in [NOTES_DIR, JOURNAL_DIR, TRASH_DIR]:
         for meta_path in base_dir.glob("*.json"):
             try:
                 meta = load_json(meta_path)
@@ -1449,10 +1474,13 @@ def api_delete_encryption_settings():
                 continue
             note_id = meta.get("id", "")
             fn = meta.get("filename", "")
-            content_path = meta_path.with_suffix(".md")
-            if not content_path.exists():
-                content_path = meta_path.with_suffix(".txt")
-            if content_path.exists():
+            content_path = None
+            for _ext in (".md", ".txt", ".yaml", ".yml"):
+                candidate = meta_path.with_suffix(_ext)
+                if candidate.exists():
+                    content_path = candidate
+                    break
+            if content_path and content_path.exists():
                 try:
                     plaintext = read_note_content(content_path, meta)
                     meta["encrypted"] = False
@@ -1514,7 +1542,7 @@ def api_toggle_encryption(note_id: str):
         fn = meta.get("filename")
         if not fn:
             return jsonify({"error": "Corrupt note (missing filename)"}), 500
-        content_path = NOTES_DIR / fn
+        content_path = meta_path.parent / fn
 
     write_note_content(content_path, content, meta)
     save_json(meta_path, meta)
@@ -1540,7 +1568,7 @@ def api_note_pdf(note_id: str):
     filename = (meta.get("filename") or f"{note_id}.md").strip()
     display = title if title else filename
 
-    safe_base = re.sub(r'[^A-Za-z0-9._-]+', "_", display)[:120].strip("_") or "note"
+    safe_base = re.sub(r'[^A-Za-z0-9._-]+', "_", _transliterate(display))[:120].strip("_") or "note"
     out_name = safe_base + ".pdf"
 
     content = ""
@@ -1618,6 +1646,114 @@ def api_note_pdf(note_id: str):
         as_attachment=True,
         download_name=out_name,
     )
+
+# ---------- Journal endpoints ----------
+import calendar
+
+
+@app.route("/api/journal/today", methods=["POST"])
+def api_journal_today():
+    ensure_dirs()
+    body = request.get_json(silent=True) or {}
+    date_str = (body.get("date") or "").strip()
+    if not date_str:
+        return jsonify({"error": "Missing date"}), 400
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "Invalid date format (expected YYYY-MM-DD)"}), 400
+
+    day_name = calendar.day_name[dt.weekday()]
+    title = f"{date_str} {day_name}"
+
+    # Search JOURNAL_DIR for existing note with that title
+    for meta_path in JOURNAL_DIR.glob("*.json"):
+        try:
+            m = load_json(meta_path)
+        except Exception:
+            continue
+        if m.get("title") == title and not m.get("deleted"):
+            return jsonify({**m, "created": False})
+
+    # Create new journal note
+    created_dt = datetime.now(timezone.utc).replace(microsecond=0)
+    for _ in range(20):
+        note_id = gen_id()
+        basename = mk_basename(note_id, user_title=title, created_dt=created_dt)
+        content_path = JOURNAL_DIR / f"{basename}.md"
+        meta_path = JOURNAL_DIR / f"{basename}.json"
+        if not content_path.exists() and not meta_path.exists():
+            break
+    else:
+        return jsonify({"error": "Failed to allocate note id"}), 500
+
+    initial_content = f"# {title}\n\n"
+    atomic_write_text(content_path, initial_content)
+    created_iso = created_dt.isoformat().replace("+00:00", "Z")
+    meta = {
+        "id": note_id,
+        "created": created_iso,
+        "updated": created_iso,
+        "rev": 1,
+        "filename": content_path.name,
+        "title": title,
+        "subject": "Journal",
+        "pdf": _default_pdf_meta(),
+        "pinned": False,
+        "deleted": False,
+        "encrypted": False,
+    }
+    save_json(meta_path, meta)
+    update_index_meta(meta)
+    log.info("Journal note created", extra={"event": "journal_created", "extra_data": {"note_id": note_id, "title": title}})
+    return jsonify({**meta, "created": True}), 201
+
+
+_JOURNAL_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})\s+\w+")
+
+
+@app.route("/api/journal/aggregate", methods=["GET"])
+def api_journal_aggregate():
+    ensure_dirs()
+    year = request.args.get("year", "").strip()
+    month = request.args.get("month", "").strip()
+    if not year:
+        return jsonify({"error": "Missing year parameter"}), 400
+
+    entries: List[Dict[str, Any]] = []
+    for meta_path in JOURNAL_DIR.glob("*.json"):
+        try:
+            m = load_json(meta_path)
+        except Exception:
+            continue
+        if m.get("deleted"):
+            continue
+        title = m.get("title", "")
+        match = _JOURNAL_DATE_RE.match(title)
+        if not match:
+            continue
+        y, mo, d = match.group(1), match.group(2), match.group(3)
+        if y != year:
+            continue
+        if month and mo != month:
+            continue
+        # Read content
+        content = ""
+        note_id = m.get("id", "")
+        content_path, _, _ = find_note_files_by_id(note_id)
+        if content_path and content_path.exists():
+            content = read_note_content(content_path, m)
+        entries.append({
+            "date": f"{y}-{mo}-{d}",
+            "title": title,
+            "content": content,
+            "id": note_id,
+        })
+
+    entries.sort(key=lambda e: e["date"])
+    period = f"{year}-{month}" if month else year
+    return jsonify({"period": period, "entries": entries})
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8060"))

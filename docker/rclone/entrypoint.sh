@@ -3,6 +3,7 @@ set -eu
 
 DATA_DIR="${DATA_DIR:-/data}"
 NOTES_DIR="${NOTES_DIR:-/data/notes}"
+JOURNAL_DIR="${JOURNAL_DIR:-/data/journal}"
 SYNC_DIR="${SYNC_DIR:-/data/sync}"
 SETTINGS="${SYNC_DIR}/settings.json"
 STATUS="${SYNC_DIR}/status.json"
@@ -102,14 +103,17 @@ run_sync(){
   vendor="other"
   make_conf "${url}" "${user}" "${pass_plain}" "${vendor}"
   remote="webdav:${remote_path}"
+  remote_journal="webdav:${remote_path}/journal"
 
   log "sync start mode=${mode} remote=${remote} no_deletes=${no_deletes}"
 
   if [ "${mode}" = "pull" ]; then
     if [ "${no_deletes}" = "true" ]; then
       rclone copy "${remote}" "${NOTES_DIR}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
+      rclone copy "${remote_journal}" "${JOURNAL_DIR}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
     else
       rclone sync "${remote}" "${NOTES_DIR}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
+      rclone sync "${remote_journal}" "${JOURNAL_DIR}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
     fi
   elif [ "${mode}" = "bisync" ]; then
     bisync_extra=""
@@ -117,11 +121,14 @@ run_sync(){
       bisync_extra="--no-cleanup"
     fi
     rclone bisync "${NOTES_DIR}" "${remote}" --workdir "${WORKDIR}" --config "${RCLONE_CONF}" --check-access --fast-list ${bisync_extra} >> "${LOG_FILE}" 2>&1
+    rclone bisync "${JOURNAL_DIR}" "${remote_journal}" --workdir "${WORKDIR}" --config "${RCLONE_CONF}" --check-access --fast-list ${bisync_extra} >> "${LOG_FILE}" 2>&1
   else
     if [ "${no_deletes}" = "true" ]; then
       rclone copy "${NOTES_DIR}" "${remote}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
+      rclone copy "${JOURNAL_DIR}" "${remote_journal}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
     else
       rclone sync "${NOTES_DIR}" "${remote}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
+      rclone sync "${JOURNAL_DIR}" "${remote_journal}" --config "${RCLONE_CONF}" >> "${LOG_FILE}" 2>&1
     fi
   fi
 

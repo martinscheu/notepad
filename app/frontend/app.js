@@ -67,6 +67,7 @@ function renderTabsSafe(){
   const elTabsBar = $("tabsBar");
 
   const elNew = $("newNote");
+  const elJournalToday = $("journalToday");
   const elUpload = $("uploadNote");
   const elUploadInput = $("uploadInput");
   const elSelectAll = $("selectAll");
@@ -1345,12 +1346,227 @@ function enableActions(enabled){
     else selectedIds.delete(id);
   }
 
+  // --- Journal tree ---
+  const MONTH_NAMES = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
+  const JOURNAL_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})\s+(\w+)/;
+
+  function parseJournalTitle(title){
+    const m = (title || "").match(JOURNAL_DATE_RE);
+    if(!m) return null;
+    return { year: m[1], month: m[2], day: m[3], dayName: m[4] };
+  }
+
+  async function openJournalToday(){
+    const dateStr = new Date().toLocaleDateString("en-CA"); // "YYYY-MM-DD"
+    setStatus("Opening journal...");
+    try{
+      const res = await apiPost("/api/journal/today", { date: dateStr });
+      const noteId = res.id;
+      await loadNotes();
+      await openNoteInNewTab(noteId);
+      setStatus("Idle");
+    }catch(e){
+      console.error(e);
+      setStatus("Error opening journal");
+    }
+  }
+
+  async function openJournalAggregate(year, month){
+    const aggId = month ? `journal-agg-${year}-${month}` : `journal-agg-${year}`;
+    // If already open, focus it
+    const existing = tabs.find(t => t.tabId === aggId);
+    if(existing){
+      activateTab(existing.tabId);
+      return;
+    }
+    setStatus("Loading journal...");
+    try{
+      const params = month ? `year=${year}&month=${month}` : `year=${year}`;
+      const data = await apiGet(`/api/journal/aggregate?${params}`);
+      const entries = data.entries || [];
+      let md = "";
+      for(const e of entries){
+        md += `## ${e.title}\n\n${e.content || ""}\n\n---\n\n`;
+      }
+      if(!entries.length) md = "*No journal entries for this period.*";
+      const tabTitle = month ? `Journal: ${year}-${month}` : `Journal: ${year}`;
+      const tab = {
+        tabId: aggId,
+        noteId: null,
+        isAggregate: true,
+        meta: { title: tabTitle },
+        rev: 0,
+        content: md,
+        lastLoadedContent: md,
+      };
+      tabs.push(tab);
+      activeTabId = tab.tabId;
+      renderTabs();
+      activateTab(tab.tabId);
+      setStatus("Idle");
+    }catch(e){
+      console.error(e);
+      setStatus("Error loading journal aggregate");
+    }
+  }
+
+  function renderJournalTree(journalNotes, activeNoteId){
+    // Build tree: { year: { month: [{ meta, day, dayName }] } }
+    const tree = {};
+    for(const meta of journalNotes){
+      const p = parseJournalTitle(meta.title);
+      if(!p) continue;
+      if(!tree[p.year]) tree[p.year] = {};
+      if(!tree[p.year][p.month]) tree[p.year][p.month] = [];
+      tree[p.year][p.month].push({ meta, day: p.day, dayName: p.dayName });
+    }
+    // Sort years descending
+    const years = Object.keys(tree).sort().reverse();
+
+    const container = document.createElement("div");
+    container.className = "journal-group" + (groupState["__journal__"] ? " collapsed" : "");
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "journal-header";
+    const headerLeft = document.createElement("div");
+    headerLeft.className = "journal-header-left";
+    const caret = document.createElement("span");
+    caret.className = "journal-caret";
+    caret.textContent = groupState["__journal__"] ? "\u25B6" : "\u25BC";
+    headerLeft.appendChild(caret);
+    const titleEl = document.createElement("span");
+    titleEl.className = "journal-header-title";
+    titleEl.textContent = "Journal";
+    headerLeft.appendChild(titleEl);
+    const countEl = document.createElement("span");
+    countEl.className = "journal-header-count";
+    countEl.textContent = `${journalNotes.length}`;
+    headerLeft.appendChild(countEl);
+    header.appendChild(headerLeft);
+
+    const todayBtn = document.createElement("button");
+    todayBtn.type = "button";
+    todayBtn.className = "journal-today-btn";
+    todayBtn.textContent = "+ Today";
+    todayBtn.addEventListener("click", (e) => { e.stopPropagation(); openJournalToday(); });
+    header.appendChild(todayBtn);
+
+    header.addEventListener("click", () => {
+      groupState["__journal__"] = !groupState["__journal__"];
+      saveGroupState();
+      renderNotesList();
+    });
+    container.appendChild(header);
+
+    // Tree body
+    const treeBody = document.createElement("div");
+    treeBody.className = "journal-tree-body";
+
+    const nowDate = new Date();
+    const currentYear = String(nowDate.getFullYear());
+    const currentMonth = String(nowDate.getMonth() + 1).padStart(2, "0");
+
+    for(const year of years){
+      const yearKey = `__jy_${year}`;
+      // Auto-expand current year, collapse others
+      const yearCollapsed = groupState[yearKey] !== undefined ? !!groupState[yearKey] : (year !== currentYear);
+      const yearEl = document.createElement("div");
+      yearEl.className = "journal-year" + (yearCollapsed ? " collapsed" : "");
+
+      const yearHeader = document.createElement("div");
+      yearHeader.className = "journal-year-header";
+      const yCaret = document.createElement("span");
+      yCaret.className = "journal-caret";
+      yCaret.textContent = yearCollapsed ? "\u25B6" : "\u25BC";
+      yearHeader.appendChild(yCaret);
+      const yLabel = document.createElement("span");
+      yLabel.className = "journal-aggregate-link";
+      yLabel.textContent = year;
+      yLabel.addEventListener("click", (e) => { e.stopPropagation(); openJournalAggregate(year, null); });
+      yearHeader.appendChild(yLabel);
+      yearHeader.addEventListener("click", () => {
+        groupState[yearKey] = !groupState[yearKey];
+        saveGroupState();
+        renderNotesList();
+      });
+      yearEl.appendChild(yearHeader);
+
+      const yearBody = document.createElement("div");
+      yearBody.className = "journal-year-body";
+
+      const months = Object.keys(tree[year]).sort().reverse();
+      for(const month of months){
+        const monthKey = `__jm_${year}_${month}`;
+        const monthCollapsed = groupState[monthKey] !== undefined ? !!groupState[monthKey] : !(year === currentYear && month === currentMonth);
+        const monthEl = document.createElement("div");
+        monthEl.className = "journal-month" + (monthCollapsed ? " collapsed" : "");
+
+        const monthHeader = document.createElement("div");
+        monthHeader.className = "journal-month-header";
+        const mCaret = document.createElement("span");
+        mCaret.className = "journal-caret";
+        mCaret.textContent = monthCollapsed ? "\u25B6" : "\u25BC";
+        monthHeader.appendChild(mCaret);
+        const mLabel = document.createElement("span");
+        mLabel.className = "journal-aggregate-link";
+        mLabel.textContent = `${month} ${MONTH_NAMES[parseInt(month,10)] || ""}`;
+        mLabel.addEventListener("click", (e) => { e.stopPropagation(); openJournalAggregate(year, month); });
+        monthHeader.appendChild(mLabel);
+        monthHeader.addEventListener("click", () => {
+          groupState[monthKey] = !groupState[monthKey];
+          saveGroupState();
+          renderNotesList();
+        });
+        monthEl.appendChild(monthHeader);
+
+        const monthBody = document.createElement("div");
+        monthBody.className = "journal-month-body";
+
+        // Sort days descending
+        const days = tree[year][month].sort((a,b) => b.day.localeCompare(a.day));
+        for(const entry of days){
+          const dayEl = document.createElement("div");
+          dayEl.className = "journal-day" + (activeNoteId && String(entry.meta.id) === String(activeNoteId) ? " active" : "");
+          dayEl.textContent = `${entry.day} ${entry.dayName}`;
+          dayEl.addEventListener("click", () => openNoteInNewTab(entry.meta.id));
+          monthBody.appendChild(dayEl);
+        }
+        monthEl.appendChild(monthBody);
+        yearBody.appendChild(monthEl);
+      }
+      yearEl.appendChild(yearBody);
+      treeBody.appendChild(yearEl);
+    }
+    container.appendChild(treeBody);
+    return container;
+  }
+
 function renderNotesList(){
     elNotesList.innerHTML = "";
-    elNotesCount.textContent = `Notes: ${notes.length}`;
     const activeNoteId = (getActiveTab && getActiveTab()) ? getActiveTab().noteId : null;
-    const grouped = {};
+
+    // Separate journal vs regular notes
+    const journalNotes = [];
+    const regularNotes = [];
     for(const meta of notes){
+      if(meta.subject === "Journal" && parseJournalTitle(meta.title)){
+        journalNotes.push(meta);
+      } else {
+        regularNotes.push(meta);
+      }
+    }
+
+    elNotesCount.textContent = `Notes: ${notes.length}`;
+
+    // Render journal tree first
+    if(journalNotes.length > 0){
+      elNotesList.appendChild(renderJournalTree(journalNotes, activeNoteId));
+    }
+
+    // Render regular notes grouped as before
+    const grouped = {};
+    for(const meta of regularNotes){
       const key = getGroupKey(meta);
       if(!grouped[key]) grouped[key] = [];
       grouped[key].push(meta);
@@ -1395,7 +1611,7 @@ function renderTabs(){
 
       const name = document.createElement("div");
       name.className = "name";
-      name.textContent = t.meta ? displayTitleWithPin(t.meta) : t.noteId;
+      name.textContent = t.isAggregate ? (t.meta?.title || "Journal") : (t.meta ? displayTitleWithPin(t.meta) : t.noteId);
 
       tab.appendChild(name);
 
@@ -1475,6 +1691,20 @@ function renderTabs(){
 
     isTyping = false;
     if(saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+
+    // Handle aggregate (read-only) tabs
+    if(t.isAggregate){
+      elEditor.disabled = true;
+      elEditor.value = t.content || "";
+      setFileName(t.meta);
+      setSaveState("", "");
+      enableActions(false);
+      setPreviewMode(true);
+      renderTabs();
+      renderNotesList();
+      setStatus("Idle");
+      return;
+    }
 
     elEditor.disabled = false;
     elEditor.value = t.content || "";
@@ -1579,6 +1809,7 @@ function renderTabs(){
   async function saveContentNow(){
     const t = getActiveTab();
     if(!t) return;
+    if(t.isAggregate) return;
 
     const raw = elEditor.value;
     const content = normalizeCitations(raw);
@@ -1688,7 +1919,7 @@ async function renameNote(){
 
   function isSupportedUploadFile(file){
     const name = (file && file.name) ? file.name.toLowerCase() : "";
-    return name.endsWith(".md") || name.endsWith(".txt");
+    return name.endsWith(".md") || name.endsWith(".txt") || name.endsWith(".yaml") || name.endsWith(".yml");
   }
 
   async function uploadFiles(files){
@@ -1699,7 +1930,7 @@ async function renameNote(){
     const invalid = list.filter((f) => !isSupportedUploadFile(f));
 
     if(!valid.length){
-      alert("Only .md or .txt files are supported.");
+      alert("Only .md, .txt, .yaml or .yml files are supported.");
       return;
     }
 
@@ -1759,6 +1990,7 @@ async function renameNote(){
   async function pollTabs(){
     if(isTyping) return;
     for(const t of tabs){
+      if(t.isAggregate) continue;
       try{
         const data = await apiGet(`/api/notes/${encodeURIComponent(t.noteId)}`);
         const remoteRev = data.meta?.rev || 0;
@@ -1808,6 +2040,7 @@ async function renameNote(){
   elSort.addEventListener("change", () => loadNotes());
 
   elNew.addEventListener("click", createNote);
+  if(elJournalToday) elJournalToday.addEventListener("click", openJournalToday);
   if(elUpload){
     elUpload.addEventListener("click", () => {
       if(elUploadInput){
@@ -1931,6 +2164,11 @@ async function renameNote(){
     if(ctrl && e.key.toLowerCase() === "h"){
       e.preventDefault();
       openReplaceModal();
+      return;
+    }
+    if(ctrl && e.key.toLowerCase() === "j"){
+      e.preventDefault();
+      openJournalToday();
       return;
     }
     if(ctrl && e.key.toLowerCase() === "n"){

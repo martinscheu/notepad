@@ -23,6 +23,7 @@ Simple self-hosted sticky notes / scratchpad web app.
 - **Search** – full-text search across filenames and content (Ctrl+K)
 - **Search & Replace** – in-note find/replace with match highlighting
 - **Table of Contents** – TOC panel with selectable heading depth
+- **Daily Journal** – Logseq-inspired daily journal with collapsible year/month/day tree, aggregated views, and Ctrl+J shortcut
 - **Subjects** – group notes by subject; autocomplete from existing subjects
 - **Pin** – pin important notes to the top
 - **PDF export** – Markdown-rendered PDF with metadata headers, TLP classification footer
@@ -36,6 +37,7 @@ Simple self-hosted sticky notes / scratchpad web app.
 | Shortcut | Action |
 |---|---|
 | Ctrl+N | New note |
+| Ctrl+J | Open today's journal |
 | Ctrl+K | Search / find in note |
 | Ctrl+H | Search & Replace |
 | Ctrl+Shift+R | Rename |

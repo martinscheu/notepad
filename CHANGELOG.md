@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.0
+
+- **Daily Journal** — Logseq-inspired daily journal feature. Journal notes live in a dedicated `/data/journal/` directory and appear in the sidebar as a collapsible year/month/day tree pinned at the top.
+  - Click "Journal" button or press **Ctrl+J** to create/open today's journal entry
+  - Journal entries titled with date and day name (e.g. "2026-02-13 Thursday")
+  - Sidebar tree auto-expands current year/month, collapses older periods
+  - Click a day to open that entry; click a month or year label to open an aggregated read-only preview
+  - Aggregate tabs concatenate all entries for the period with date headers and dividers
+  - All existing features work on journal notes: encryption, PDF export, rename, delete, restore
+  - Restored journal notes return to the journal directory (not notes)
+  - Export includes `journal/` folder in ZIP
+  - WebDAV sync includes journal directory
+
 ## 1.1.63
 
 - **Copy button on code blocks** — preview mode now shows a "Copy" button in the top-right corner of every `<pre>` block. Appears on hover, works for Markdown, JSON, YAML, and text previews. Uses `navigator.clipboard` with a `document.execCommand('copy')` fallback for plain HTTP contexts.

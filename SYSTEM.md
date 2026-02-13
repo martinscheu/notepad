@@ -22,6 +22,7 @@ Structure:
 ├── current -> releases/<version>
 ├── notes/             # persistent data
 │   ├── notes/
+│   ├── journal/       # daily journal entries
 │   ├── trash/
 │   ├── exports/
 │   └── sync/          # WebDAV sync settings & status
@@ -73,6 +74,7 @@ Volumes:
 - Nordic, low-distraction theme
 - Dark / light mode
 - No icons, text-based controls
+- Daily journal with collapsible year/month/day tree, aggregate views (Ctrl+J)
 - Deep links via `/?id=<note_id>`
 
 ## PDF Export
@@ -105,4 +107,4 @@ Volumes:
 - Real-time collaboration
 
 ## Current Version
-- 1.1.56
+- 1.2.0
