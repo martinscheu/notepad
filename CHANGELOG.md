@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.3
+
+- **German umlaut transliteration** — filenames, PDF downloads, and markdown downloads now transliterate German umlauts (ä→ae, ö→oe, ü→ue, ß→ss) and strip other diacritics via NFKD normalization, both server-side and client-side.
+
 ## 1.2.0
 
 - **Daily Journal** — Logseq-inspired daily journal feature. Journal notes live in a dedicated `/data/journal/` directory and appear in the sidebar as a collapsible year/month/day tree pinned at the top.

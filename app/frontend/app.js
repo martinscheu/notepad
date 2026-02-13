@@ -2864,6 +2864,9 @@ document.addEventListener("keydown", (e)=>{
 
 
 function sanitizeFilename(name){
-  const n = (name || "note").toString().trim() || "note";
+  const UMLAUT_MAP = {"ä":"ae","ö":"oe","ü":"ue","ß":"ss","Ä":"Ae","Ö":"Oe","Ü":"Ue"};
+  let n = (name || "note").toString().trim() || "note";
+  n = n.replace(/[äöüßÄÖÜ]/g, ch => UMLAUT_MAP[ch] || ch);
+  n = n.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
   return n.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0,120).replace(/^_+|_+$/g,"") || "note";
 }
