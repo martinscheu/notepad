@@ -12,6 +12,7 @@
   --border: #d7dde4;
   --accent: #2b6cb0;
   --danger: #b00020;
+  --hl-current-bg: rgba(30,30,40,0.75);
 
   --radius: 12px;
   --gap: 12px;
@@ -28,6 +29,7 @@
   --border: #263142;
   --accent: #6aa6ff;
   --danger: #ff6b7a;
+  --hl-current-bg: rgba(255,255,255,0.85);
 }
 
 *{ box-sizing: border-box; }
@@ -478,18 +480,17 @@ body{
 }
 
 .editor-highlight .hl{
-  background: rgba(200,180,60,0.3);
+  background: rgba(255,120,0,0.40);
   color: transparent;
   border-radius: 2px;
-  border-bottom: 2px solid rgba(180,160,40,0.5);
+  border-bottom: 2px solid rgba(255,100,0,0.7);
 }
 .editor-highlight .hl-current{
-  background: rgba(255,120,0,0.45);
+  background: var(--hl-current-bg, rgba(255,255,255,0.85));
   color: transparent;
-  border-radius: 2px;
-  outline: 2px solid rgba(255,100,0,0.8);
+  border-radius: 3px;
+  outline: 2.5px solid var(--text);
   outline-offset: 0px;
-  border-bottom: 2px solid rgba(255,100,0,0.9);
 }
 
 .replace-panel{
