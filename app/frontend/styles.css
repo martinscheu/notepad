@@ -12,6 +12,7 @@
   --border: #d7dde4;
   --accent: #2b6cb0;
   --danger: #b00020;
+  --hl-bg: rgba(30,30,40,0.25);
   --hl-current-bg: rgba(30,30,40,0.80);
   --hl-current-text: #ffffff;
 
@@ -30,6 +31,7 @@
   --border: #263142;
   --accent: #6aa6ff;
   --danger: #ff6b7a;
+  --hl-bg: rgba(255,255,255,0.30);
   --hl-current-bg: rgba(255,255,255,0.90);
   --hl-current-text: #111111;
 }
@@ -486,10 +488,9 @@ body{
 }
 
 .editor-highlight .hl{
-  background: rgba(255,120,0,0.40);
+  background: var(--hl-bg);
   color: transparent;
   border-radius: 2px;
-  border-bottom: 2px solid rgba(255,100,0,0.7);
 }
 .editor-highlight .hl-current{
   background: var(--hl-current-bg);
@@ -499,6 +500,10 @@ body{
   outline-offset: 0px;
 }
 
+.editor-highlight-top .hl-text{
+  color: var(--hl-current-text);
+  border-radius: 2px;
+}
 .editor-highlight-top .hl-current-text{
   color: var(--hl-current-text);
   border-radius: 3px;

@@ -258,11 +258,17 @@ let deleteInProgress = false;
   }
 
   function buildTopHighlightHtml(text, matches, currentIdx){
-    if(currentIdx < 0 || currentIdx >= matches.length) return "";
-    const m = matches[currentIdx];
-    let out = escapeForHighlight(text.slice(0, m.start));
-    out += `<span class="hl-current-text">${escapeForHighlight(text.slice(m.start, m.end))}</span>`;
-    out += escapeForHighlight(text.slice(m.end));
+    if(!matches.length) return "";
+    let out = "";
+    let last = 0;
+    for(let i = 0; i < matches.length; i++){
+      const m = matches[i];
+      out += escapeForHighlight(text.slice(last, m.start));
+      const cls = i === currentIdx ? "hl-current-text" : "hl-text";
+      out += `<span class="${cls}">${escapeForHighlight(text.slice(m.start, m.end))}</span>`;
+      last = m.end;
+    }
+    out += escapeForHighlight(text.slice(last));
     return out;
   }
 
