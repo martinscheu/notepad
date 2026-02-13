@@ -12,7 +12,8 @@
   --border: #d7dde4;
   --accent: #2b6cb0;
   --danger: #b00020;
-  --hl-current-bg: rgba(30,30,40,0.75);
+  --hl-current-bg: rgba(30,30,40,0.80);
+  --hl-current-text: #ffffff;
 
   --radius: 12px;
   --gap: 12px;
@@ -29,7 +30,8 @@
   --border: #263142;
   --accent: #6aa6ff;
   --danger: #ff6b7a;
-  --hl-current-bg: rgba(255,255,255,0.85);
+  --hl-current-bg: rgba(255,255,255,0.90);
+  --hl-current-text: #111111;
 }
 
 *{ box-sizing: border-box; }
@@ -458,17 +460,21 @@ body{
   background: color-mix(in srgb, var(--surface), var(--accent) 6%);
 }
 
-.editor, .editor-highlight{
+.editor, .editor-highlight, .editor-highlight-top{
   box-sizing: border-box;
 }
-.editor-highlight{
+.editor-highlight,
+.editor-highlight-top{
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-  z-index: 1;
 }
-.editor-highlight-inner{
+.editor-highlight{ z-index: 1; }
+.editor-highlight-top{ z-index: 3; }
+
+.editor-highlight-inner,
+.editor-highlight-top-inner{
   padding: 14px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
@@ -486,11 +492,16 @@ body{
   border-bottom: 2px solid rgba(255,100,0,0.7);
 }
 .editor-highlight .hl-current{
-  background: var(--hl-current-bg, rgba(255,255,255,0.85));
+  background: var(--hl-current-bg);
   color: transparent;
   border-radius: 3px;
   outline: 2.5px solid var(--text);
   outline-offset: 0px;
+}
+
+.editor-highlight-top .hl-current-text{
+  color: var(--hl-current-text);
+  border-radius: 3px;
 }
 
 .replace-panel{

@@ -90,6 +90,7 @@ function renderTabsSafe(){
   const elPreview = $("preview");
   const elEditor = $("editor");
   const elEditorHighlight = $("editorHighlight");
+  const elEditorHighlightTop = $("editorHighlightTop");
   const elTocPanel = $("tocPanel");
   const elTocList = $("tocList");
   const elTocDepth = $("tocDepth");
@@ -256,6 +257,15 @@ let deleteInProgress = false;
     return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  function buildTopHighlightHtml(text, matches, currentIdx){
+    if(currentIdx < 0 || currentIdx >= matches.length) return "";
+    const m = matches[currentIdx];
+    let out = escapeForHighlight(text.slice(0, m.start));
+    out += `<span class="hl-current-text">${escapeForHighlight(text.slice(m.start, m.end))}</span>`;
+    out += escapeForHighlight(text.slice(m.end));
+    return out;
+  }
+
   function buildHighlightHtml(text, matches, currentIdx){
     if(!matches.length){
       return escapeForHighlight(text);
@@ -284,8 +294,13 @@ let deleteInProgress = false;
     return idx === -1 ? 0 : idx;
   }
 
-  function setHighlightContent(html){
+  function setHighlightContent(html, topHtml){
     elEditorHighlight.innerHTML = `<div class="editor-highlight-inner">${html}</div>`;
+    if(elEditorHighlightTop){
+      elEditorHighlightTop.innerHTML = topHtml
+        ? `<div class="editor-highlight-top-inner">${topHtml}</div>`
+        : "";
+    }
     syncEditorHighlightScroll();
   }
 
@@ -305,23 +320,30 @@ let deleteInProgress = false;
     }
     const matches = computeMatches(text, query, matchCase, wholeWord);
     const curIdx = matches.length ? getCurrentMatchIndex(matches) : -1;
-    setHighlightContent(buildHighlightHtml(text, matches, curIdx));
+    setHighlightContent(
+      buildHighlightHtml(text, matches, curIdx),
+      buildTopHighlightHtml(text, matches, curIdx)
+    );
   }
 
   function syncHighlightGeometry(){
     if(!elEditorHighlight) return;
     const sbw = elEditor.offsetWidth - elEditor.clientWidth;
     elEditorHighlight.style.right = sbw + "px";
+    if(elEditorHighlightTop) elEditorHighlightTop.style.right = sbw + "px";
   }
 
   function syncEditorHighlightScroll(){
     if(!elEditorHighlight) return;
     syncHighlightGeometry();
-    const inner = elEditorHighlight.firstElementChild;
-    if(!inner) return;
+    const tx = `translate(${-elEditor.scrollLeft}px, ${-elEditor.scrollTop}px)`;
     requestAnimationFrame(() => {
-      inner.style.transform =
-        `translate(${-elEditor.scrollLeft}px, ${-elEditor.scrollTop}px)`;
+      const inner = elEditorHighlight.firstElementChild;
+      if(inner) inner.style.transform = tx;
+      if(elEditorHighlightTop){
+        const topInner = elEditorHighlightTop.firstElementChild;
+        if(topInner) topInner.style.transform = tx;
+      }
     });
   }
 
