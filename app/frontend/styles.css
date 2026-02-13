@@ -12,8 +12,8 @@
   --border: #d7dde4;
   --accent: #2b6cb0;
   --danger: #b00020;
-  --hl-bg: rgba(30,30,40,0.25);
-  --hl-current-bg: rgba(30,30,40,0.80);
+  --hl-bg: rgba(30,30,40,0.60);
+  --hl-current-bg: rgba(30,30,40,0.85);
   --hl-current-text: #ffffff;
 
   --radius: 12px;
@@ -31,8 +31,8 @@
   --border: #263142;
   --accent: #6aa6ff;
   --danger: #ff6b7a;
-  --hl-bg: rgba(255,255,255,0.30);
-  --hl-current-bg: rgba(255,255,255,0.90);
+  --hl-bg: rgba(255,255,255,0.65);
+  --hl-current-bg: rgba(255,255,255,0.92);
   --hl-current-text: #111111;
 }
 
